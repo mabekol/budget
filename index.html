@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>G&C Control Presupuestal</title>
+    <title>Control Presupuestal</title>
     <style>
         :root { --primary: #2F4F4F; --accent: #48C9B0; --bg: #EBF5F3; --white: #fff; --danger: #c0392b; --success: #27ae60; }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); padding: 20px; color: #333; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); padding: 20px; color: #333; font-size:14px; }
         .container { max-width: 1200px; margin: 0 auto; }
         .card { background: var(--white); padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
@@ -27,17 +27,23 @@
         td { padding: 8px; border-bottom: 1px solid #eee; }
         .table-wrap { overflow-x: auto; }
         
-        #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.9); display: flex; justify-content: center; align-items: center; z-index: 999; }
+        #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.9); display: flex; justify-content: center; align-items: center; z-index: 999; flex-direction: column; }
+        .debug-bar { background: #fff3cd; color: #856404; padding: 10px; margin-bottom: 20px; border-radius: 5px; font-family: monospace; display:none; border: 1px solid #ffeeba; }
     </style>
 </head>
 <body>
 
-<div id="loader"><h2>🔄 Cargando datos...</h2></div>
+<div id="loader">
+    <h2>🔄 Cargando...</h2>
+    <p id="loaderStatus">Conectando con SheetDB...</p>
+</div>
 
 <div class="container">
+    <div id="debugInfo" class="debug-bar"></div>
+
     <div class="header">
         <h1>G&C <span style="color:var(--accent)">SOLUTIONS</span></h1>
-        <button onclick="syncData()">Actualizar</button>
+        <button onclick="window.location.reload()">Recargar</button>
     </div>
 
     <div class="card kpi-box">
@@ -50,7 +56,7 @@
         <div class="card">
             <h2>Registrar Gasto</h2>
             <form onsubmit="addExpense(event)">
-                <label>Código</label><select id="selCode" required><option>Cargando...</option></select>
+                <label>Código</label><select id="selCode" required><option>Esperando datos...</option></select>
                 <label>Referencia</label><input type="text" id="ref" required>
                 <div style="display:flex; gap:10px">
                     <div style="flex:1"><label>Monto</label><input type="number" id="amt" required></div>
@@ -81,10 +87,17 @@
 
 <script>
     // ==================================================
-    // ⚠️ PEGA TU URL DE SHEETDB AQUÍ (SIN EL ?sheet=...) ⚠️
+    // ⚠️ PEGA TU URL DE SHEETDB AQUÍ ⚠️
     // Ejemplo: https://sheetdb.io/api/v1/sw4ed7qqbxl4k
-    const API_URL = "https://sheetdb.io/api/v1/sw4ed7qqbxl4k";
+    let API_URL = "https://sheetdb.io/api/v1/sw4ed7qqbxl4k";
     // ==================================================
+
+    // --- AUTOCORRECCIÓN DE URL ---
+    // Si por error pegaste la URL con ?sheet=... el código lo arregla solo
+    if (API_URL.includes("?")) {
+        API_URL = API_URL.split("?")[0];
+        console.warn("URL corregida automáticamente");
+    }
 
     let budget = [], expenses = [];
 
@@ -94,22 +107,32 @@
     });
 
     async function syncData() {
-        document.getElementById('loader').style.display = 'flex';
+        const loader = document.getElementById('loader');
+        const status = document.getElementById('loaderStatus');
+        loader.style.display = 'flex';
+        
         try {
-            // 1. Leer Presupuesto
+            // 1. LEER PRESUPUESTO
+            status.innerText = "Leyendo Presupuesto...";
             const resB = await fetch(`${API_URL}?sheet=Presupuesto`);
-            budget = await resB.json();
+            const jsonB = await resB.json();
+            
+            if (jsonB.error) throw new Error("Error SheetDB: " + jsonB.error);
+            budget = Array.isArray(jsonB) ? jsonB : [];
 
-            // 2. Leer Gastos
+            // 2. LEER GASTOS
+            status.innerText = "Leyendo Gastos...";
             const resE = await fetch(`${API_URL}?sheet=Gastos`);
-            expenses = await resE.json();
+            const jsonE = await resE.json();
+            expenses = Array.isArray(jsonE) ? jsonE : [];
 
-            renderUI();
+            renderUI(); // Pintar la pantalla
+            
         } catch (e) {
             console.error(e);
-            alert("Error conectando: " + e.message);
+            showDebug("Error Crítico: " + e.message + ". Revisa la consola.");
         }
-        document.getElementById('loader').style.display = 'none';
+        loader.style.display = 'none';
     }
 
     async function addExpense(e) {
@@ -151,88 +174,123 @@
         document.getElementById('loader').style.display = 'none';
     }
 
+    // --- FUNCIÓN INTELIGENTE PARA ENCONTRAR DATOS ---
+    // Busca "Codigo", "CODIGO", "codigo" automáticamente
+    function getVal(obj, keys) {
+        if (!obj) return undefined;
+        // Si pasamos una sola clave, la volvemos array
+        if (!Array.isArray(keys)) keys = [keys];
+        
+        // Obtenemos todas las llaves reales del objeto que vino de SheetDB
+        const objectKeys = Object.keys(obj);
+        
+        for (let k of keys) {
+            // Buscamos ignorando mayúsculas/minúsculas
+            const foundKey = objectKeys.find(ok => ok.toLowerCase() === k.toLowerCase());
+            if (foundKey) return obj[foundKey];
+        }
+        return undefined;
+    }
+
     function renderUI() {
         const sel = document.getElementById('selCode');
         sel.innerHTML = '<option value="">-- Seleccionar --</option>';
         
-        // --- CORRECCIÓN DE NOMBRES SEGÚN TU IMAGEN ---
-        // Buscamos CODIGO, DESCRIPCION, ENERO (todo mayúsculas)
-        
-        budget.forEach(b => {
-            // Intenta mayúsculas (tu caso real) o Capitalizado
-            const code = b.CODIGO || b.Codigo || b.codigo; 
-            const desc = b.DESCRIPCION || b.Descripcion || b.descripcion || "";
-            
-            if(code) {
-                const o = document.createElement('option');
-                o.value = code;
-                o.text = `${code} - ${desc.substring(0,30)}`;
-                sel.appendChild(o);
-            }
-        });
+        if (budget.length === 0) {
+            showDebug("Alerta: No se encontraron filas en la hoja 'Presupuesto'.");
+            return;
+        }
 
+        // DIAGNÓSTICO: Verificamos qué columnas llegaron en la primera fila
+        const firstRowKeys = Object.keys(budget[0]).join(", ");
+        console.log("Columnas detectadas:", firstRowKeys);
+
+        // Mapa de Gastos
         const expMap = {};
         let tSpent = 0;
         expenses.forEach(x => {
             if(!x.date) return;
             const p = x.date.split('-');
             const m = parseInt(p[1])-1;
-            const k = `${x.code}-${m}`;
-            expMap[k] = (expMap[k]||0) + Number(x.amount);
-            tSpent += Number(x.amount);
+            const k = `${getVal(x, ['code', 'codigo'])}-${m}`;
+            expMap[k] = (expMap[k]||0) + Number(getVal(x, ['amount', 'monto']));
+            tSpent += Number(getVal(x, ['amount', 'monto']));
         });
 
+        // Matriz
         const tb = document.querySelector('#mainTable tbody');
         tb.innerHTML = '';
         let tBud = 0;
         
-        // TUS MESES SEGÚN TU IMAGEN (Mayúsculas completas)
-        const monthKeys = ["ENERO","FEBRERO","MARZO","ABRIL","MAYO","JUNIO","JULIO","AGOSTO","SEPTIEMBRE","OCTUBRE","NOVIEMBRE","DICIEMBRE"];
+        // Nombres de meses posibles (Español e Inglés)
+        const monthNames = [
+            ["Ene","Enero","Jan","January"], ["Feb","Febrero","Feb","February"], ["Mar","Marzo","Mar","March"],
+            ["Abr","Abril","Apr","April"], ["May","Mayo","May"], ["Jun","Junio","Jun","June"],
+            ["Jul","Julio","Jul","July"], ["Ago","Agosto","Aug","August"], ["Sep","Septiembre","Sep","September"],
+            ["Oct","Octubre","Oct","October"], ["Nov","Noviembre","Nov","November"], ["Dic","Diciembre","Dec","December"]
+        ];
 
         budget.forEach(l => {
-            const code = l.CODIGO || l.Codigo || l.codigo;
+            // Usamos el buscador inteligente
+            const code = getVal(l, ['codigo', 'code', 'cod']);
+            const desc = getVal(l, ['descripcion', 'desc', 'description']) || "";
+            
             if(!code) return;
             
-            // Busca Total (o lo calcula si no existe columna Total)
-            let total = Number(l.TOTAL || l.Total || 0);
+            const total = Number(getVal(l, ['total', 'total año', 'total_año']) || 0);
             
             const tr = document.createElement('tr');
             let h = `<td><b>${code}</b></td>`;
-            
-            let sumMonths = 0;
+            let rowSum = 0;
+
             for(let i=0; i<12; i++) {
-                // Buscar el valor usando el nombre del mes en MAYÚSCULAS
-                let rawVal = l[monthKeys[i]] || l[Object.keys(l)[i+2]] || "0";
-                // Limpiar puntos de miles (ej: "37.165.994" -> 37165994)
-                if(typeof rawVal === 'string') rawVal = rawVal.replace(/\./g, '').replace(/,/g, '.');
+                // Busca el mes probando todos los nombres posibles
+                let valRaw = getVal(l, monthNames[i]);
                 
-                let b = Number(rawVal) || 0;
-                sumMonths += b;
+                // Limpieza de números (quita puntos de miles)
+                if(typeof valRaw === 'string') valRaw = valRaw.replace(/\./g, '').replace(/,/g, '.');
                 
+                let b = Number(valRaw) || 0;
+                rowSum += b;
+
                 let s = expMap[`${code}-${i}`]||0;
                 h += `<td>${b?fmt(b):'-'}<br><span style="color:${s?'red':'#ccc'}">${s?fmt(s):''}</span></td>`;
             }
             
-            // Si la columna Total viene vacía, usamos la suma calculada
-            if(total === 0) total = sumMonths;
-            tBud += total;
+            // Si no hay columna total, usamos la suma
+            let finalTotal = total > 0 ? total : rowSum;
+            tBud += finalTotal;
 
-            h += `<td><b>${fmt(total)}</b></td>`;
+            h += `<td><b>${fmt(finalTotal)}</b></td>`;
             tr.innerHTML = h;
             tb.appendChild(tr);
+
+            // Llenar Select
+            const o = document.createElement('option');
+            o.value = code;
+            o.text = `${code} - ${desc.substring(0,30)}`;
+            sel.appendChild(o);
         });
 
         document.getElementById('kTotal').innerText = fmt(tBud);
         document.getElementById('kAvail').innerText = fmt(tBud-tSpent);
         document.getElementById('kPerc').innerText = tBud>0 ? ((tSpent/tBud)*100).toFixed(1)+"%" : "0%";
 
+        // Historial
         const th = document.querySelector('#histTable tbody');
         th.innerHTML = '';
-        [...expenses].sort((a,b)=>b.id-a.id).slice(0,10).forEach(x => {
+        [...expenses].sort((a,b)=>getVal(b, 'id') - getVal(a, 'id')).slice(0,10).forEach(x => {
             const r = document.createElement('tr');
-            r.innerHTML = `<td>${x.date}</td><td>${x.ref}</td><td class="money">${fmt(x.amount)}</td><td><button class="danger" onclick="delExp(${x.id})">x</button></td>`;
+            const id = getVal(x, 'id');
+            r.innerHTML = `<td>${getVal(x, 'date')}</td><td>${getVal(x, 'ref')}</td><td class="money">${fmt(getVal(x, 'amount'))}</td><td><button class="danger" onclick="delExp(${id})">x</button></td>`;
             th.appendChild(r);
         });
+    }
+
+    function showDebug(msg) {
+        const d = document.getElementById('debugInfo');
+        d.style.display = 'block';
+        d.innerText = msg;
     }
 
     function fmt(n) { return new Intl.NumberFormat('es-CO', {maximumFractionDigits:0}).format(n); }
