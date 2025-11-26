@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>G&C Control Presupuestal</title>
+    <title>Control Presupuestal</title>
     <style>
         :root { --primary: #2F4F4F; --accent: #48C9B0; --bg: #EBF5F3; --white: #fff; --danger: #c0392b; --success: #27ae60; }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #333; padding: 20px; font-size:14px; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); padding: 20px; color: #333; }
         .container { max-width: 1200px; margin: 0 auto; }
-        .card { background: var(--white); padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .card { background: var(--white); padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         @media(max-width:800px){ .grid { grid-template-columns: 1fr; } }
         
-        input, select { padding: 10px; width: 100%; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; margin-bottom: 10px; }
-        label { font-weight: bold; color: var(--primary); display: block; margin-bottom: 3px; }
-        button { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; color: white; background: var(--primary); }
+        input, select { padding: 10px; width: 100%; border: 1px solid #ccc; border-radius: 5px; margin-bottom: 10px; box-sizing: border-box; }
+        label { font-weight: bold; color: var(--primary); display: block; margin-bottom: 5px; }
+        button { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; color: white; background: var(--primary); transition: 0.2s; }
         button.accent { background: var(--accent); color: #004d40; width: 100%; }
         button.danger { background: var(--danger); padding: 5px 10px; font-size: 0.8em; }
         
@@ -27,7 +27,7 @@
         td { padding: 8px; border-bottom: 1px solid #eee; }
         .table-wrap { overflow-x: auto; }
         
-        #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.8); display: flex; justify-content: center; align-items: center; z-index: 999; }
+        #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.9); display: flex; justify-content: center; align-items: center; z-index: 999; }
     </style>
 </head>
 <body>
@@ -36,13 +36,13 @@
 
 <div class="container">
     <div class="header">
-        <h1 style="color:var(--primary)">G&C <span style="color:var(--accent)">SOLUTIONS</span></h1>
-        <button onclick="syncData()">Actualizar Datos</button>
+        <h1>G&C <span style="color:var(--accent)">SOLUTIONS</span></h1>
+        <button onclick="syncData()">Actualizar</button>
     </div>
 
     <div class="card kpi-box">
         <div><small>PRESUPUESTO</small><div class="kpi-val" id="kTotal">$0</div></div>
-        <div><small>DISPONIBLE</small><div class="kpi-val" id="kAvail" style="color:var(--success)">$0</div></div>
+        <div><small>DISPONIBLE</small><div class="kpi-val" id="kAvail">$0</div></div>
         <div><small>EJECUCIÓN</small><div class="kpi-val" id="kPerc">0%</div></div>
     </div>
 
@@ -50,7 +50,6 @@
         <div class="card">
             <h2>Registrar Gasto</h2>
             <form onsubmit="addExpense(event)">
-                <label>Usuario</label><input type="text" id="uName" required placeholder="Tu nombre">
                 <label>Código</label><select id="selCode" required><option>Cargando...</option></select>
                 <label>Referencia</label><input type="text" id="ref" required>
                 <div style="display:flex; gap:10px">
@@ -69,16 +68,8 @@
         </div>
     </div>
 
-    <div class="card" id="configPanel" style="display:none; border: 2px dashed orange;">
-        <h3>⚠️ Base de datos vacía</h3>
-        <p>Sube el archivo CSV para comenzar.</p>
-        <input type="file" id="csvFile" accept=".csv">
-        <button onclick="uploadBudgetCSV()" class="accent">Subir Presupuesto</button>
-    </div>
-
     <div class="card">
         <h2>Matriz Mensual</h2>
-        <input type="text" placeholder="Buscar..." onkeyup="filter(this.value)">
         <div class="table-wrap">
             <table id="mainTable">
                 <thead><tr><th>Cod</th><th>Ene</th><th>Feb</th><th>Mar</th><th>Abr</th><th>May</th><th>Jun</th><th>Jul</th><th>Ago</th><th>Sep</th><th>Oct</th><th>Nov</th><th>Dic</th><th>Total</th></tr></thead>
@@ -89,53 +80,34 @@
 </div>
 
 <script>
-    // ⚠️ TU URL YA PEGADA AQUI ⚠️
-    const API_URL = "https://script.google.com/macros/s/AKfycbwMebzoBSMi-sgvL0xxHoN_zYjiQyBwsHR2CTRePypXQALcRVwjq6AmxEXXubFE_QE/exec";
+    // ==================================================
+    // ⚠️ PEGA TU URL DE SHEETDB AQUÍ ⚠️
+    const API_URL = "https://sheetdb.io/api/v1/sw4ed7qqbxl4k";
+    // ==================================================
 
     let budget = [], expenses = [];
 
     document.addEventListener('DOMContentLoaded', () => {
-        if(localStorage.getItem('u')) document.getElementById('uName').value = localStorage.getItem('u');
         document.getElementById('date').valueAsDate = new Date();
         syncData();
     });
 
-    // === TÉCNICA "FORM DATA" (EVITA BLOQUEOS CORS Y AD-BLOCKERS) ===
-    async function apiCall(params) {
-        // Convertimos los datos a formato de Formulario (key=value)
-        const formData = new URLSearchParams();
-        for (const key in params) {
-            // Si es objeto, lo volvemos string, si no, lo pasamos directo
-            const val = typeof params[key] === 'object' ? JSON.stringify(params[key]) : params[key];
-            formData.append(key, val);
-        }
-
-        const res = await fetch(API_URL, {
-            method: "POST",
-            body: formData // Envio como formulario simple
-        });
-        
-        const json = await res.json();
-        if (json.error) throw new Error(json.error);
-        return json;
-    }
-
     async function syncData() {
         document.getElementById('loader').style.display = 'flex';
         try {
-            // 1. Leer Presupuesto
-            const bData = await apiCall({ action: 'readData', sheetName: 'Presupuesto' });
-            budget = Array.isArray(bData) ? bData : [];
+            // 1. Leer Presupuesto (Hoja 1 por defecto en SheetDB si no especificas)
+            // SheetDB usa ?sheet=NombreHoja
+            const resB = await fetch(`${API_URL}?sheet=Presupuesto`);
+            budget = await resB.json();
 
             // 2. Leer Gastos
-            const eData = await apiCall({ action: 'readData', sheetName: 'Gastos' });
-            expenses = Array.isArray(eData) ? eData : [];
+            const resE = await fetch(`${API_URL}?sheet=Gastos`);
+            expenses = await resE.json();
 
             renderUI();
         } catch (e) {
             console.error(e);
-            if(budget.length === 0) document.getElementById('kTotal').innerText = "Offline";
-            alert("Error de conexión: " + e.message);
+            alert("Error conectando: " + e.message);
         }
         document.getElementById('loader').style.display = 'none';
     }
@@ -143,12 +115,9 @@
     async function addExpense(e) {
         e.preventDefault();
         document.getElementById('loader').style.display = 'flex';
-        
-        const u = document.getElementById('uName').value;
-        localStorage.setItem('u', u);
 
         const data = {
-            id: Date.now(), user: u,
+            id: Date.now(),
             code: document.getElementById('selCode').value,
             ref: document.getElementById('ref').value,
             amount: document.getElementById('amt').value,
@@ -156,13 +125,18 @@
         };
 
         try {
-            await apiCall({ action: 'addExpense', data: data });
-            expenses.push(data); // Optimista
+            await fetch(`${API_URL}?sheet=Gastos`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: data })
+            });
+            
+            expenses.push(data);
             renderUI();
             document.getElementById('ref').value = "";
             document.getElementById('amt').value = "";
             alert("✅ Guardado");
-        } catch (e) { alert("Error: " + e.message); }
+        } catch (e) { alert("Error al guardar: " + e.message); }
         document.getElementById('loader').style.display = 'none';
     }
 
@@ -170,71 +144,72 @@
         if(!confirm("¿Borrar?")) return;
         document.getElementById('loader').style.display = 'flex';
         try {
-            await apiCall({ action: 'deleteExpense', id: id });
+            // SheetDB borra por columna ID: /id/{valor}
+            await fetch(`${API_URL}/id/${id}?sheet=Gastos`, { method: 'DELETE' });
             expenses = expenses.filter(x => x.id != id);
             renderUI();
         } catch(e) { alert("Error: " + e.message); }
         document.getElementById('loader').style.display = 'none';
     }
 
-    function uploadBudgetCSV() {
-        const f = document.getElementById('csvFile').files[0];
-        if(!f) return alert("Selecciona archivo");
-        const r = new FileReader();
-        r.readAsText(f, "ISO-8859-1");
-        r.onload = async function(e) {
-            document.getElementById('loader').style.display = 'flex';
-            const lines = processCSV(e.target.result);
-            try {
-                await apiCall({ action: 'uploadBudget', data: lines });
-                alert("✅ Subido. Recargando...");
-                syncData();
-            } catch(err) { alert("Error: " + err.message); }
-            document.getElementById('loader').style.display = 'none';
-        }
-    }
-
     function renderUI() {
-        document.getElementById('configPanel').style.display = budget.length ? 'none' : 'block';
-        
         const sel = document.getElementById('selCode');
-        const cv = sel.value;
         sel.innerHTML = '<option value="">-- Seleccionar --</option>';
+        
+        // Normalizamos claves (SheetDB respeta mayúsculas/minúsculas de tus encabezados)
+        // Asegúrate que en tu Excel la columna se llame "Codigo" (primera letra mayúscula)
+        
         budget.forEach(b => {
-            const o = document.createElement('option');
-            o.value = b.codigo;
-            o.text = `${b.codigo} - ${b.descripcion.substring(0,30)}`;
-            sel.appendChild(o);
+            const code = b.Codigo || b.codigo; // Intentar ambas
+            const desc = b.Descripcion || b.descripcion || "";
+            if(code) {
+                const o = document.createElement('option');
+                o.value = code;
+                o.text = `${code} - ${desc.substring(0,30)}`;
+                sel.appendChild(o);
+            }
         });
-        sel.value = cv;
 
+        // Mapa de Gastos
         const expMap = {};
         let tSpent = 0;
         expenses.forEach(x => {
             if(!x.date) return;
             const p = x.date.split('-');
-            if(p.length===3){
-                const m = parseInt(p[1])-1;
-                const k = `${x.code}-${m}`;
-                expMap[k] = (expMap[k]||0) + Number(x.amount);
-                tSpent += Number(x.amount);
-            }
+            const m = parseInt(p[1])-1;
+            const k = `${x.code}-${m}`;
+            expMap[k] = (expMap[k]||0) + Number(x.amount);
+            tSpent += Number(x.amount);
         });
 
+        // Matriz
         const tb = document.querySelector('#mainTable tbody');
         tb.innerHTML = '';
         let tBud = 0;
+        
+        const monthsKeys = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]; // Ajusta según tus encabezados en Excel
+
         budget.forEach(l => {
-            tBud += Number(l.total||0);
+            const code = l.Codigo || l.codigo;
+            if(!code) return;
+            
+            const total = Number(l.Total || l.total || 0);
+            tBud += total;
+            
             const tr = document.createElement('tr');
-            let h = `<td><b>${l.codigo}</b><br><small>${l.descripcion.substring(0,20)}</small></td>`;
-            const ms = l.monthly || [];
+            let h = `<td><b>${code}</b></td>`;
+            
             for(let i=0; i<12; i++) {
-                const b = Number(ms[i])||0;
-                const s = expMap[`${l.codigo}-${i}`]||0;
+                // Buscar valor usando la clave del mes (ej: "Ene" o "January")
+                // SheetDB devuelve un objeto: { Ene: "1000", Feb: "0"... }
+                // Intenta buscar por nombre corto, largo o indice si fallan
+                let val = l[monthsKeys[i]] || l[Object.keys(l)[i+2]] || 0; 
+                
+                let b = Number(val);
+                let s = expMap[`${code}-${i}`]||0;
                 h += `<td>${b?fmt(b):'-'}<br><span style="color:${s?'red':'#ccc'}">${s?fmt(s):''}</span></td>`;
             }
-            h += `<td><b>${fmt(l.total)}</b></td>`;
+            h += `<td><b>${fmt(total)}</b></td>`;
             tr.innerHTML = h;
             tb.appendChild(tr);
         });
@@ -243,43 +218,17 @@
         document.getElementById('kAvail').innerText = fmt(tBud-tSpent);
         document.getElementById('kPerc').innerText = tBud>0 ? ((tSpent/tBud)*100).toFixed(1)+"%" : "0%";
 
+        // Historial
         const th = document.querySelector('#histTable tbody');
         th.innerHTML = '';
         [...expenses].sort((a,b)=>b.id-a.id).slice(0,10).forEach(x => {
             const r = document.createElement('tr');
-            r.innerHTML = `<td>${x.date}</td><td>${x.ref}</td><td>${fmt(x.amount)}</td><td><button class="danger" onclick="delExp(${x.id})">x</button></td>`;
+            r.innerHTML = `<td>${x.date}</td><td>${x.ref}</td><td class="money">${fmt(x.amount)}</td><td><button class="danger" onclick="delExp(${x.id})">x</button></td>`;
             th.appendChild(r);
         });
     }
 
-    function processCSV(t) {
-        if(!t) return [];
-        const l = t.split(/\r\n|\n|\r/);
-        let s = ';';
-        if(l[0] && (l[0].match(/,/g)||[]).length > (l[0].match(/;/g)||[]).length) s = ',';
-        const res = [];
-        for(let i=1; i<l.length; i++) {
-            const r = l[i].split(s);
-            if(r.length < 2) continue;
-            const c = String(r[0]||"").replace(/"/g,'').trim();
-            const d = String(r[1]||"").replace(/"/g,'').trim();
-            const m = [];
-            let tot = 0;
-            for(let k=2; k<=13; k++) {
-                let v = String(r[k]||"0").replace(/\./g,'').replace(/,/g,'.').replace(/[^0-9.-]/g,'');
-                let n = parseFloat(v)||0;
-                m.push(n); tot += n;
-            }
-            if(c) res.push({code:c, desc:d, monthly:m, total:tot});
-        }
-        return res;
-    }
-
     function fmt(n) { return new Intl.NumberFormat('es-CO', {maximumFractionDigits:0}).format(n); }
-    function filter(v) {
-        v=v.toLowerCase();
-        document.querySelectorAll('#mainTable tbody tr').forEach(r => r.style.display = r.innerText.toLowerCase().includes(v)?'':'none');
-    }
 </script>
 </body>
 </html>
