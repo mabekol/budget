@@ -159,13 +159,18 @@
         // Normalizamos claves (SheetDB respeta mayúsculas/minúsculas de tus encabezados)
         // Asegúrate que en tu Excel la columna se llame "Codigo" (primera letra mayúscula)
         
+// --- CORRECCIÓN: Búsqueda inteligente de columnas ---
         budget.forEach(b => {
-            const code = b.Codigo || b.codigo; // Intentar ambas
-            const desc = b.Descripcion || b.descripcion || "";
-            if(code) {
+            // Buscamos la columna sin importar mayúsculas/minúsculas
+            // Intentamos: "CODIGO", "Codigo", "codigo", "Código"
+            const code = b.CODIGO || b.Codigo || b.codigo || b["Código"];
+            const desc = b.DESCRIPCION || b.Descripcion || b.descripcion || b["Descripción"] || "";
+            
+            // Solo agregamos si encontramos un código válido
+            if (code) {
                 const o = document.createElement('option');
                 o.value = code;
-                o.text = `${code} - ${desc.substring(0,30)}`;
+                o.text = `${code} - ${desc.substring(0, 30)}`;
                 sel.appendChild(o);
             }
         });
@@ -189,27 +194,49 @@
         
         const monthsKeys = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]; // Ajusta según tus encabezados en Excel
 
+// --- CORRECCIÓN TABLA: Búsqueda inteligente de meses ---
+        const monthKeys = [
+            ["Ene", "ENE", "January"], ["Feb", "FEB", "February"], ["Mar", "MAR", "March"],
+            ["Abr", "ABR", "April"], ["May", "MAY", "May"], ["Jun", "JUN", "June"],
+            ["Jul", "JUL", "July"], ["Ago", "AGO", "August"], ["Sep", "SEP", "September"],
+            ["Oct", "OCT", "October"], ["Nov", "NOV", "November"], ["Dic", "DIC", "December"]
+        ];
+
         budget.forEach(l => {
-            const code = l.Codigo || l.codigo;
-            if(!code) return;
-            
-            const total = Number(l.Total || l.total || 0);
-            tBud += total;
-            
+            const code = l.CODIGO || l.Codigo || l.codigo || l["Código"];
+            if (!code) return; // Si no hay código, saltamos
+
+            // Buscar Total
+            const totalVal = l.TOTAL || l.Total || l.total || 0;
+            tBud += Number(totalVal);
+
             const tr = document.createElement('tr');
-            let h = `<td><b>${code}</b></td>`;
-            
-            for(let i=0; i<12; i++) {
-                // Buscar valor usando la clave del mes (ej: "Ene" o "January")
-                // SheetDB devuelve un objeto: { Ene: "1000", Feb: "0"... }
-                // Intenta buscar por nombre corto, largo o indice si fallan
-                let val = l[monthsKeys[i]] || l[Object.keys(l)[i+2]] || 0; 
+            const desc = l.DESCRIPCION || l.Descripcion || l.descripcion || "";
+            let h = `<td><b>${code}</b><br><small>${desc.substring(0, 20)}</small></td>`;
+
+            for (let i = 0; i < 12; i++) {
+                // Buscar el valor del mes probando varios nombres posibles
+                let val = 0;
+                for (const key of monthKeys[i]) {
+                    if (l[key] !== undefined) {
+                        val = l[key];
+                        break;
+                    }
+                }
                 
-                let b = Number(val);
-                let s = expMap[`${code}-${i}`]||0;
-                h += `<td>${b?fmt(b):'-'}<br><span style="color:${s?'red':'#ccc'}">${s?fmt(s):''}</span></td>`;
+                // Limpieza de números (quita puntos de mil si vienen como texto)
+                if (typeof val === 'string') val = val.replace(/\./g, '').replace(/,/g, '.');
+                let b = Number(val) || 0;
+                
+                const s = expMap[`${code}-${i}`] || 0;
+                const bg = (new Date().getMonth() === i) ? 'style="background:#f0fbf7"' : '';
+                
+                h += `<td ${bg}>
+                    ${b !== 0 ? fmt(b) : '-'}
+                    <br><span style="color:${s ? 'red' : '#ccc'}">${s ? fmt(s) : ''}</span>
+                </td>`;
             }
-            h += `<td><b>${fmt(total)}</b></td>`;
+            h += `<td><b>${fmt(totalVal)}</b></td>`;
             tr.innerHTML = h;
             tb.appendChild(tr);
         });
@@ -232,3 +259,4 @@
 </script>
 </body>
 </html>
+
