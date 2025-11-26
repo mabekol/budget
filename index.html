@@ -136,10 +136,8 @@
 </div>
 
 <script>
-    // =========================================================
-    // ⚠️ PEGA AQUÍ TU URL DE GOOGLE APPS SCRIPT (Entre comillas) ⚠️
-    const API_URL = "https://script.google.com/macros/s/AKfycbwiM8-zOuehpF5MtrneR7fZDxORb8DLWsmiYzm0GqZlxc3lRm6QdQn9OvtRGhasl-g/exec"; 
-    // =========================================================
+    // ⚠️ TU URL DE GOOGLE ⚠️
+    const API_URL = "https://script.google.com/macros/s/AKfycbw2w38hsMLguD-3QKBSBgyeMynbzYD5VAJ-YkG8q1GtT46cym30ZqFZ4EPMQb64RP8/exec"; 
 
     let budget = [];
     let expenses = [];
@@ -151,92 +149,45 @@
         syncData();
     });
 
-    // === COMUNICACIÓN BLINDADA (TODO ES POST) ===
-    async function apiCall(action, payload = {}) {
-        try {
-            // 1. Preparamos el paquete de datos
-            const body = JSON.stringify({ action: action, ...payload });
-            
-            // 2. Enviamos como texto plano (text/plain) para evitar bloqueo CORS
-            const response = await fetch(API_URL, {
-                method: "POST",
-                redirect: "follow",
-                headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: body
-            });
-
-            // 3. Verificamos la respuesta
-            const result = await response.json();
-            if (result.error) throw new Error(result.error);
-            return result;
-
-        } catch (err) {
-            console.error("API Error:", err);
-            throw err;
-        }
-    }
-
-// --- SINCRONIZACIÓN MODO DIAGNÓSTICO ---
+    // === 1. SINCRONIZACIÓN (USANDO GET + FIX CREDENCIALES) ===
     async function syncData() {
         showLoader(true);
-        const kpiDisplay = document.getElementById('kpiTotal');
-        
         try {
-            // Imprimimos en pantalla que estamos intentando...
-            kpiDisplay.innerText = "Conectando...";
-            
-            // Verificar que la URL no esté vacía
-            if(API_URL.includes("PEGAR_AQUI") || API_URL.length < 10) {
-                throw new Error("La URL del script no se ha configurado en el código.");
-            }
-
-            // Intento de conexión
-            const resB = await fetch(API_URL, {
-                method: "POST",
+            // PEDIR PRESUPUESTO (GET)
+            // credentials: 'omit' es OBLIGATORIO para evitar el error 400 de Google
+            const resB = await fetch(API_URL + "?sheet=Presupuesto", {
+                method: "GET",
                 redirect: "follow",
                 headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify({ action: 'readData', sheetName: 'Presupuesto' })
+                credentials: 'omit' 
             });
-
-            if (!resB.ok) {
-                throw new Error(`Error HTTP: ${resB.status} ${resB.statusText}`);
-            }
-
-            const textResponse = await resB.text(); // Leemos como texto primero para ver si es error HTML
             
-            let dataB;
-            try {
-                dataB = JSON.parse(textResponse);
-            } catch (e) {
-                console.log("Respuesta recibida:", textResponse);
-                throw new Error("Google devolvió texto en vez de datos (Revisa la URL)");
-            }
-
-            if (dataB.error) throw new Error(dataB.error);
-
+            if (!resB.ok) throw new Error("Error HTTP Presupuesto: " + resB.status);
+            const dataB = await resB.json();
             budget = Array.isArray(dataB) ? dataB : [];
-            
-            // Si llegamos aquí, funcionó el presupuesto, vamos por los gastos
-            const resE = await fetch(API_URL, {
-                method: "POST",
+
+            // PEDIR GASTOS (GET)
+            const resE = await fetch(API_URL + "?sheet=Gastos", {
+                method: "GET",
                 redirect: "follow",
                 headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify({ action: 'readData', sheetName: 'Gastos' })
+                credentials: 'omit'
             });
+
+            if (!resE.ok) throw new Error("Error HTTP Gastos: " + resE.status);
             const dataE = await resE.json();
             expenses = Array.isArray(dataE) ? dataE : [];
 
-            renderUI(); // Si todo sale bien, se pinta la tabla
-
+            renderUI();
         } catch (err) {
             console.error(err);
-            // AQUÍ ESTÁ LA CLAVE: Mostramos el error en grande
-            kpiDisplay.innerHTML = `<span style="color:red; font-size:0.5em">${err.message}</span>`;
-            alert("FALLO: " + err.message);
+            document.getElementById('kpiTotal').innerText = "Offline";
+            alert("⚠️ Error de conexión: " + err.message);
         }
         showLoader(false);
     }
-    // --- ACCIONES ---
+
+    // === 2. GUARDAR GASTO (USANDO POST) ===
     async function addExpense(e) {
         e.preventDefault();
         showLoader(true);
@@ -253,24 +204,42 @@
         };
 
         try {
-            await apiCall('addExpense', { data: data });
-            expenses.push(data); // Optimista
-            renderUI();
-            document.getElementById('ocRef').value = '';
-            document.getElementById('ocAmount').value = '';
-            alert("✅ Guardado.");
+            // Usamos POST con text/plain para evitar bloqueo CORS
+            const res = await fetch(API_URL, {
+                method: "POST",
+                redirect: "follow",
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify({ action: 'addExpense', data: data })
+            });
+            
+            const result = await res.json();
+            if(result.result === "Guardado") {
+                expenses.push(data);
+                renderUI();
+                document.getElementById('ocRef').value = '';
+                document.getElementById('ocAmount').value = '';
+                alert("✅ Guardado correctamente.");
+            } else {
+                throw new Error(JSON.stringify(result));
+            }
         } catch (err) { alert("Error al guardar: " + err.message); }
         showLoader(false);
     }
 
+    // === OTRAS FUNCIONES ===
     async function deleteExpense(id) {
         if(!confirm("¿Borrar gasto?")) return;
         showLoader(true);
         try {
-            await apiCall('deleteExpense', { id: id });
+            await fetch(API_URL, {
+                method: "POST",
+                redirect: "follow",
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify({ action: 'deleteExpense', id: id })
+            });
             expenses = expenses.filter(e => e.id != id);
             renderUI();
-        } catch(err) { alert("Error: " + err.message); }
+        } catch(err) { alert("Error: " + err); }
         showLoader(false);
     }
 
@@ -283,7 +252,12 @@
             showLoader(true);
             try {
                 const lines = processCSV(e.target.result); 
-                await apiCall('uploadBudget', { data: lines });
+                await fetch(API_URL, {
+                    method: "POST",
+                    redirect: "follow",
+                    headers: { "Content-Type": "text/plain;charset=utf-8" },
+                    body: JSON.stringify({ action: 'uploadBudget', data: lines })
+                });
                 alert("✅ Presupuesto subido.");
                 syncData();
             } catch(err) { alert("Error: " + err.message); }
@@ -291,11 +265,8 @@
         };
     }
 
-    // --- RENDERIZADO ---
     function renderUI() {
         document.getElementById('configPanel').style.display = budget.length ? 'none' : 'block';
-        
-        // Select
         const sel = document.getElementById('selCode');
         const cv = sel.value;
         sel.innerHTML = '<option value="">-- Seleccionar --</option>';
@@ -307,7 +278,6 @@
         });
         sel.value = cv;
 
-        // Map Expenses
         const expMap = {};
         let tSpent = 0;
         expenses.forEach(x => {
@@ -321,14 +291,13 @@
             }
         });
 
-        // Matrix
         const tbody = document.querySelector('#matrixTable tbody');
         tbody.innerHTML = '';
         let tBud = 0;
         budget.forEach(l => {
             tBud += Number(l.total||0);
             const tr = document.createElement('tr');
-            let tds = `<td title="${l.descripcion}"><b>${l.codigo}</b><br><small style="color:#666">${l.descripcion?l.descripcion.substring(0,20):''}...</small></td>`;
+            let tds = `<td title="${l.descripcion}"><b>${l.codigo}</b><br><small>${l.descripcion?l.descripcion.substring(0,20):''}...</small></td>`;
             const m = l.monthly || [];
             for(let i=0; i<12; i++) {
                 const b = Number(m[i]) || 0;
@@ -341,14 +310,12 @@
             tbody.appendChild(tr);
         });
 
-        // KPIs
         const avail = tBud - tSpent;
         document.getElementById('kpiTotal').innerText = fmtMoney(tBud);
         document.getElementById('kpiAvail').innerText = fmtMoney(avail);
         document.getElementById('kpiAvail').style.color = avail >= 0 ? 'var(--success)' : 'var(--danger)';
         document.getElementById('kpiPerc').innerText = tBud > 0 ? ((tSpent/tBud)*100).toFixed(1) + "%" : "0%";
 
-        // Historial
         const hBody = document.querySelector('#historyTable tbody');
         hBody.innerHTML = '';
         [...expenses].sort((a,b)=>b.id-a.id).slice(0,10).forEach(x => {
@@ -361,24 +328,20 @@
         if(f) filterTable(f);
     }
 
-    // --- UTILS ---
     function processCSV(text) {
         if(!text) return [];
         const lines = text.split(/\r\n|\n|\r/);
         let sep = ';';
         const fLine = lines.find(l => l && l.length > 5);
         if(fLine && (fLine.match(/,/g)||[]).length > (fLine.match(/;/g)||[]).length) sep = ',';
-        
         const res = [];
         for(let i=1; i<lines.length; i++) {
             const row = lines[i].split(sep);
             if(row.length < 2) continue;
-            
             const code = String(row[0]||"").replace(/"/g,'').trim();
             const desc = String(row[1]||"").replace(/"/g,'').trim();
             const m = [];
             let t = 0;
-            
             for(let k=2; k<=13; k++) {
                 let v = String(row[k]||"0");
                 v = v.replace(/\./g,'').replace(/,/g,'.').replace(/[^0-9.-]/g,'');
@@ -402,5 +365,6 @@
 </script>
 </body>
 </html>
+
 
 
