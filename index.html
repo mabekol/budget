@@ -116,9 +116,15 @@
     // ==================================================
 
     let budget = [], expenses = [];
-    const MONTH_KEYS = ["ENERO","FEBRERO","MARZO","ABRIL","MAYO","JUNIO","JULIO","AGOSTO","SEPTIEMBRE","OCTUBRE","NOVIEMBRE","DICIEMBRE"];
+    // Nombres posibles para buscar en el Excel (Flexible)
+    const MONTH_NAMES_POSSIBLE = [
+        ["Ene","Enero","ENERO","JAN","January"], ["Feb","Febrero","FEBRERO","FEB","February"], ["Mar","Marzo","MARZO","MAR","March"],
+        ["Abr","Abril","ABRIL","APR","April"], ["May","Mayo","MAYO","MAY","May"], ["Jun","Junio","JUNIO","JUN","June"],
+        ["Jul","Julio","JULIO","JUL","July"], ["Ago","Agosto","AGOSTO","AUG","August"], ["Sep","Septiembre","SEPTIEMBRE","SEP","September"],
+        ["Oct","Octubre","OCTUBRE","OCT","October"], ["Nov","Noviembre","NOVIEMBRE","NOV","November"], ["Dic","Diciembre","DICIEMBRE","DEC","December"]
+    ];
+    const MONTH_LABELS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
     
-    // Variable temporal para el traslado
     let pendingExpense = null;
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -126,21 +132,39 @@
         syncData();
     });
 
-    // --- FORMATO MONEDA EN INPUT ---
+    // --- UTILIDADES ---
     function formatCurrencyInput(input) {
-        // 1. Quitar todo lo que no sea número
         let val = input.value.replace(/\D/g, '');
         if (val === "") { input.value = ""; return; }
-        
-        // 2. Formatear con puntos de mil
         let num = parseInt(val, 10);
         input.value = new Intl.NumberFormat('es-CO').format(num);
     }
 
-    // Función auxiliar para obtener el valor real (número) del input
     function getAmountValue() {
         const val = document.getElementById('amtDisplay').value;
         return parseFloat(val.replace(/\./g, '')) || 0;
+    }
+
+    // Función Inteligente para buscar valores (ignora mayúsculas)
+    function getValueSmart(obj, possibleKeys) {
+        if(!obj) return undefined;
+        const keys = Object.keys(obj);
+        for (const pKey of possibleKeys) {
+            const found = keys.find(k => k.toUpperCase() === pKey.toUpperCase());
+            if (found) return obj[found];
+        }
+        return undefined;
+    }
+
+    // Función para encontrar el NOMBRE REAL de la columna en SheetDB (para el update)
+    function getRealColumnName(obj, monthIdx) {
+        const possibleKeys = MONTH_NAMES_POSSIBLE[monthIdx];
+        const keys = Object.keys(obj);
+        for (const pKey of possibleKeys) {
+            const found = keys.find(k => k.toUpperCase() === pKey.toUpperCase());
+            if (found) return found;
+        }
+        return null;
     }
 
     async function syncData() {
@@ -166,22 +190,21 @@
         const dateStr = document.getElementById('date').value;
         const ref = document.getElementById('ref').value;
 
-        // 1. Determinar mes (0-11)
+        // 1. Determinar mes
         const parts = dateStr.split('-');
         const monthIdx = parseInt(parts[1]) - 1;
-        const monthName = MONTH_KEYS[monthIdx];
 
-        // 2. Calcular Disponible
-        // Buscar línea de presupuesto
-        const line = budget.find(b => (b.CODIGO||b.Codigo||b.codigo) == code);
+        // 2. Buscar línea de presupuesto
+        // Buscamos CODIGO, Codigo, codigo...
+        const line = budget.find(b => getValueSmart(b, ["CODIGO", "Codigo", "Code"]) == code);
         if (!line) return alert("Código no encontrado en presupuesto");
 
-        // Presupuesto del mes
-        let rawBud = line[monthName] || "0";
+        // 3. Obtener Presupuesto del mes (Búsqueda flexible)
+        let rawBud = getValueSmart(line, MONTH_NAMES_POSSIBLE[monthIdx]) || "0";
         if(typeof rawBud === 'string') rawBud = rawBud.replace(/\./g,'').replace(/,/g,'.');
         const budgetMonth = parseFloat(rawBud) || 0;
 
-        // Gastado en ese mes
+        // 4. Calcular gastado
         let spentMonth = 0;
         expenses.forEach(x => {
             const p = x.date.split('-');
@@ -192,14 +215,11 @@
 
         const available = budgetMonth - spentMonth;
 
-        // 3. Validar
         if (amount > available) {
             const missing = amount - available;
-            // Guardar datos temporales para el traslado
             pendingExpense = { code, amount, date: dateStr, ref, monthIdx, missing };
             openModal(line, monthIdx, missing);
         } else {
-            // Si alcanza, guardar directo
             saveExpense(code, ref, amount, dateStr);
         }
     }
@@ -208,35 +228,33 @@
         const modal = document.getElementById('alertModal');
         const select = document.getElementById('modalSourceMonth');
         
-        document.getElementById('modalTargetMonth').innerText = MONTH_KEYS[targetIdx];
+        document.getElementById('modalTargetMonth').innerText = MONTH_LABELS[targetIdx];
         document.getElementById('modalMissing').innerText = fmt(missing);
         
         select.innerHTML = '';
         
-        // Buscar meses con saldo
-        MONTH_KEYS.forEach((mKey, idx) => {
-            if (idx === targetIdx) return; // No el mismo mes
+        MONTH_NAMES_POSSIBLE.forEach((possibleNames, idx) => {
+            if (idx === targetIdx) return; 
 
-            // Calcular saldo de ese mes posible origen
-            let rawBud = line[mKey] || "0";
+            // Buscar valor en el objeto usando nombres posibles
+            let rawBud = getValueSmart(line, possibleNames) || "0";
             if(typeof rawBud === 'string') rawBud = rawBud.replace(/\./g,'').replace(/,/g,'.');
             const bud = parseFloat(rawBud) || 0;
 
             let spent = 0;
             expenses.forEach(x => {
                 const p = x.date.split('-');
-                if (x.code == line.CODIGO && (parseInt(p[1])-1) == idx) {
+                if (x.code == getValueSmart(line, ["CODIGO","Codigo"]) && (parseInt(p[1])-1) == idx) {
                     spent += parseFloat(x.amount);
                 }
             });
 
             const avail = bud - spent;
             
-            // Solo mostrar si alcanza para cubrir el hueco
             if (avail >= missing) {
                 const opt = document.createElement('option');
                 opt.value = idx;
-                opt.text = `${mKey} (Disp: ${fmt(avail)})`;
+                opt.text = `${MONTH_LABELS[idx]} (Disp: ${fmt(avail)})`;
                 select.appendChild(opt);
             }
         });
@@ -244,7 +262,6 @@
         if (select.options.length === 0) {
             select.innerHTML = '<option>⛔ No hay fondos en otros meses</option>';
         }
-
         modal.style.display = 'flex';
     }
 
@@ -253,7 +270,6 @@
         pendingExpense = null;
     }
 
-    // --- LÓGICA DE TRASLADO (SHEETDB UPDATE) ---
     async function executeTransfer() {
         if(!pendingExpense) return;
         const sourceIdx = document.getElementById('modalSourceMonth').value;
@@ -261,46 +277,50 @@
 
         const targetIdx = pendingExpense.monthIdx;
         const amountToMove = pendingExpense.missing;
-        
-        // Nombres de columnas en Excel
-        const colSource = MONTH_KEYS[sourceIdx];
-        const colTarget = MONTH_KEYS[targetIdx];
         const code = pendingExpense.code;
 
         document.getElementById('loader').style.display = 'flex';
         closeModal();
 
         try {
-            // 1. Calcular nuevos valores para el Excel
-            const line = budget.find(b => (b.CODIGO||b.Codigo) == code);
+            const line = budget.find(b => getValueSmart(b, ["CODIGO","Codigo"]) == code);
             
-            // Valor Origen
-            let valSource = parseFloat(String(line[colSource]).replace(/\./g,'')) || 0;
+            // Encontrar nombres REALES de las columnas en SheetDB para hacer el update
+            const colSourceReal = getRealColumnName(line, sourceIdx);
+            const colTargetReal = getRealColumnName(line, targetIdx);
+
+            if(!colSourceReal || !colTargetReal) throw new Error("No pude identificar las columnas de meses en la base de datos.");
+
+            // Calcular nuevos valores
+            let valSource = parseFloat(String(line[colSourceReal]).replace(/\./g,'')) || 0;
             let newSource = valSource - amountToMove;
 
-            // Valor Destino
-            let valTarget = parseFloat(String(line[colTarget]).replace(/\./g,'')) || 0;
+            let valTarget = parseFloat(String(line[colTargetReal]).replace(/\./g,'')) || 0;
             let newTarget = valTarget + amountToMove;
 
-            // 2. Actualizar SheetDB (PATCH)
-            // Usamos la columna CODIGO como llave primaria
-            // URL: /api/v1/{id}/CODIGO/{valor_codigo}?sheet=Presupuesto
+            // Update SheetDB
+            // Usamos la columna CODIGO para buscar (asumiendo que se llama CODIGO o Codigo)
+            const keyColName = getRealColumnName(line, -1) || "CODIGO"; // -1 truco o busqueda manual
+            // Mejor estrategia: Usar el endpoint search o update directo si conocemos la llave primaria
+            // SheetDB permite update por query. Ej: /CODIGO/{valor}
             
-            const updateData = {};
-            updateData[colSource] = newSource;
-            updateData[colTarget] = newTarget;
+            // Identificar nombre de la columna codigo
+            const codeKey = Object.keys(line).find(k => k.toUpperCase() === "CODIGO") || "CODIGO";
 
-            await fetch(`${API_URL}/CODIGO/${code}?sheet=Presupuesto`, {
+            const updateData = {};
+            updateData[colSourceReal] = newSource;
+            updateData[colTargetReal] = newTarget;
+
+            await fetch(`${API_URL}/${codeKey}/${code}?sheet=Presupuesto`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ data: updateData })
             });
 
-            // 3. Guardar el Gasto
-            await saveExpense(code, pendingExpense.ref, pendingExpense.amount, pendingExpense.date, false); // False para no ocultar loader aun
+            await saveExpense(code, pendingExpense.ref, pendingExpense.amount, pendingExpense.date, false);
             
             alert("✅ Traslado y Gasto registrados correctamente.");
-            syncData(); // Recargar todo
+            syncData();
 
         } catch (e) {
             alert("Error en traslado: " + e.message);
@@ -348,12 +368,11 @@
 
     function renderUI() {
         const sel = document.getElementById('selCode');
-        const cur = sel.value;
         sel.innerHTML = '<option value="">-- Seleccionar --</option>';
         
         budget.forEach(b => {
-            const code = b.CODIGO || b.Codigo;
-            const desc = b.DESCRIPCION || b.Descripcion || "";
+            const code = getValueSmart(b, ["CODIGO", "Codigo"]);
+            const desc = getValueSmart(b, ["DESCRIPCION", "Descripcion"]) || "";
             if(code) {
                 const o = document.createElement('option');
                 o.value = code;
@@ -361,7 +380,6 @@
                 sel.appendChild(o);
             }
         });
-        sel.value = cur;
 
         const expMap = {};
         let tSpent = 0;
@@ -379,25 +397,25 @@
         let tBud = 0;
 
         budget.forEach(l => {
-            const code = l.CODIGO || l.Codigo;
+            const code = getValueSmart(l, ["CODIGO", "Codigo"]);
             if(!code) return;
             
-            let total = Number(l.TOTAL || l.Total || 0);
+            let total = Number(getValueSmart(l, ["TOTAL", "Total"]) || 0);
+            
             const tr = document.createElement('tr');
             let h = `<td><b>${code}</b></td>`;
             
             let rowSum = 0;
             for(let i=0; i<12; i++) {
-                let rawVal = l[MONTH_KEYS[i]] || "0";
+                let rawVal = getValueSmart(l, MONTH_NAMES_POSSIBLE[i]) || "0";
                 if(typeof rawVal === 'string') rawVal = rawVal.replace(/\./g, '').replace(/,/g, '.');
                 let b = Number(rawVal) || 0;
                 rowSum += b;
                 
                 let s = expMap[`${code}-${i}`]||0;
-                // Semáforo
                 let color = '#ccc'; 
-                if(s > b) color = 'red'; // Sobregiro
-                else if(s > 0) color = '#27ae60'; // Gastado normal
+                if(s > b) color = 'red'; 
+                else if(s > 0) color = '#27ae60';
 
                 h += `<td>${b?fmt(b):'-'}<br><span style="color:${color}; font-weight:bold; font-size:0.85em">${s?fmt(s):''}</span></td>`;
             }
