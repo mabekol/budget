@@ -32,12 +32,12 @@
 </head>
 <body>
 
-<div id="loader"><h2>🔄 Cargando Datos...</h2></div>
+<div id="loader"><h2>🔄 Conectando...</h2></div>
 
 <div class="container">
     <div class="header">
         <h1 style="color:var(--primary)">G&C <span style="color:var(--accent)">SOLUTIONS</span></h1>
-        <button onclick="startSync()">Actualizar</button>
+        <button onclick="syncData()">Actualizar Datos</button>
     </div>
 
     <div class="card kpi-box">
@@ -89,64 +89,61 @@
 </div>
 
 <script>
-    // ==================================================
-    // ⚠️ PEGA TU URL AQUÍ ⚠️
-    const API_URL = "https://script.google.com/macros/s/AKfycbziFAlZO3qzz-lFHdy6pd4idAUFcagDWiWsmFVQnkWKz1UggFgsnLFwO6hJvZqtgqc/exec";
-    // ==================================================
+    // ⚠️ TU URL YA PEGADA AQUI ⚠️
+    const API_URL = "https://script.google.com/macros/s/AKfycbwMebzoBSMi-sgvL0xxHoN_zYjiQyBwsHR2CTRePypXQALcRVwjq6AmxEXXubFE_QE/exec";
 
     let budget = [], expenses = [];
 
     document.addEventListener('DOMContentLoaded', () => {
         if(localStorage.getItem('u')) document.getElementById('uName').value = localStorage.getItem('u');
         document.getElementById('date').valueAsDate = new Date();
-        startSync();
+        syncData();
     });
 
-    // === TÉCNICA JSONP (INYECCIÓN DE SCRIPT) ===
-    // Esto evita el bloqueo de fetch por parte del navegador/antivirus
-    
-    function startSync() {
-        document.getElementById('loader').style.display = 'flex';
-        // 1. Inyectar petición de Presupuesto
-        const s = document.createElement('script');
-        s.src = `${API_URL}?sheet=Presupuesto&callback=handleBudgetResponse&t=${Date.now()}`;
-        document.body.appendChild(s);
-    }
+    // === TÉCNICA "FORM DATA" (EVITA BLOQUEOS CORS Y AD-BLOCKERS) ===
+    async function apiCall(params) {
+        // Convertimos los datos a formato de Formulario (key=value)
+        const formData = new URLSearchParams();
+        for (const key in params) {
+            // Si es objeto, lo volvemos string, si no, lo pasamos directo
+            const val = typeof params[key] === 'object' ? JSON.stringify(params[key]) : params[key];
+            formData.append(key, val);
+        }
 
-    // Esta función es llamada automáticamente por Google cuando responde
-    window.handleBudgetResponse = function(data) {
-        if(data.error) { alert("Error Budget: " + data.error); return; }
-        budget = Array.isArray(data) ? data : [];
-        
-        // 2. Inyectar petición de Gastos
-        const s = document.createElement('script');
-        s.src = `${API_URL}?sheet=Gastos&callback=handleExpensesResponse&t=${Date.now()}`;
-        document.body.appendChild(s);
-    };
-
-    window.handleExpensesResponse = function(data) {
-        if(data.error) { alert("Error Gastos: " + data.error); return; }
-        expenses = Array.isArray(data) ? data : [];
-        
-        renderUI();
-        document.getElementById('loader').style.display = 'none';
-    };
-
-    // === ESCRITURA (POST) ===
-    // El POST suele estar menos bloqueado, usamos fetch con text/plain
-    async function sendData(action, payload) {
         const res = await fetch(API_URL, {
             method: "POST",
-            redirect: "follow",
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify({ action: action, ...payload })
+            body: formData // Envio como formulario simple
         });
-        return await res.json();
+        
+        const json = await res.json();
+        if (json.error) throw new Error(json.error);
+        return json;
+    }
+
+    async function syncData() {
+        document.getElementById('loader').style.display = 'flex';
+        try {
+            // 1. Leer Presupuesto
+            const bData = await apiCall({ action: 'readData', sheetName: 'Presupuesto' });
+            budget = Array.isArray(bData) ? bData : [];
+
+            // 2. Leer Gastos
+            const eData = await apiCall({ action: 'readData', sheetName: 'Gastos' });
+            expenses = Array.isArray(eData) ? eData : [];
+
+            renderUI();
+        } catch (e) {
+            console.error(e);
+            if(budget.length === 0) document.getElementById('kTotal').innerText = "Offline";
+            alert("Error de conexión: " + e.message);
+        }
+        document.getElementById('loader').style.display = 'none';
     }
 
     async function addExpense(e) {
         e.preventDefault();
         document.getElementById('loader').style.display = 'flex';
+        
         const u = document.getElementById('uName').value;
         localStorage.setItem('u', u);
 
@@ -159,13 +156,13 @@
         };
 
         try {
-            await sendData('addExpense', { data: data });
+            await apiCall({ action: 'addExpense', data: data });
             expenses.push(data); // Optimista
             renderUI();
             document.getElementById('ref').value = "";
             document.getElementById('amt').value = "";
             alert("✅ Guardado");
-        } catch (e) { alert("Error al guardar: " + e.message); }
+        } catch (e) { alert("Error: " + e.message); }
         document.getElementById('loader').style.display = 'none';
     }
 
@@ -173,7 +170,7 @@
         if(!confirm("¿Borrar?")) return;
         document.getElementById('loader').style.display = 'flex';
         try {
-            await sendData('deleteExpense', { id: id });
+            await apiCall({ action: 'deleteExpense', id: id });
             expenses = expenses.filter(x => x.id != id);
             renderUI();
         } catch(e) { alert("Error: " + e.message); }
@@ -189,15 +186,14 @@
             document.getElementById('loader').style.display = 'flex';
             const lines = processCSV(e.target.result);
             try {
-                await sendData('uploadBudget', { data: lines });
+                await apiCall({ action: 'uploadBudget', data: lines });
                 alert("✅ Subido. Recargando...");
-                startSync();
+                syncData();
             } catch(err) { alert("Error: " + err.message); }
             document.getElementById('loader').style.display = 'none';
         }
     }
 
-    // --- RENDERIZADO ---
     function renderUI() {
         document.getElementById('configPanel').style.display = budget.length ? 'none' : 'block';
         
@@ -207,7 +203,7 @@
         budget.forEach(b => {
             const o = document.createElement('option');
             o.value = b.codigo;
-            o.text = `${b.codigo} - ${b.descripcion ? b.descripcion.substring(0,30) : ''}...`;
+            o.text = `${b.codigo} - ${b.descripcion.substring(0,30)}`;
             sel.appendChild(o);
         });
         sel.value = cv;
@@ -256,7 +252,6 @@
         });
     }
 
-    // UTILS
     function processCSV(t) {
         if(!t) return [];
         const l = t.split(/\r\n|\n|\r/);
@@ -288,7 +283,3 @@
 </script>
 </body>
 </html>
-
-
-
-
