@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Control Presupuestal</title>
+    <title>G&C Control Presupuestal</title>
     <style>
         :root { --primary: #2F4F4F; --accent: #48C9B0; --bg: #EBF5F3; --white: #fff; --danger: #c0392b; --success: #27ae60; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); padding: 20px; color: #333; }
@@ -32,7 +32,7 @@
 </head>
 <body>
 
-<div id="loader"><h2>🔄 Conectando...</h2></div>
+<div id="loader"><h2>🔄 Cargando datos...</h2></div>
 
 <div class="container">
     <div class="header">
@@ -81,7 +81,8 @@
 
 <script>
     // ==================================================
-    // ⚠️ PEGA TU URL DE SHEETDB AQUÍ ⚠️
+    // ⚠️ PEGA TU URL DE SHEETDB AQUÍ (SIN EL ?sheet=...) ⚠️
+    // Ejemplo: https://sheetdb.io/api/v1/sw4ed7qqbxl4k
     const API_URL = "https://sheetdb.io/api/v1/sw4ed7qqbxl4k";
     // ==================================================
 
@@ -95,8 +96,7 @@
     async function syncData() {
         document.getElementById('loader').style.display = 'flex';
         try {
-            // 1. Leer Presupuesto (Hoja 1 por defecto en SheetDB si no especificas)
-            // SheetDB usa ?sheet=NombreHoja
+            // 1. Leer Presupuesto
             const resB = await fetch(`${API_URL}?sheet=Presupuesto`);
             budget = await resB.json();
 
@@ -144,7 +144,6 @@
         if(!confirm("¿Borrar?")) return;
         document.getElementById('loader').style.display = 'flex';
         try {
-            // SheetDB borra por columna ID: /id/{valor}
             await fetch(`${API_URL}/id/${id}?sheet=Gastos`, { method: 'DELETE' });
             expenses = expenses.filter(x => x.id != id);
             renderUI();
@@ -156,26 +155,22 @@
         const sel = document.getElementById('selCode');
         sel.innerHTML = '<option value="">-- Seleccionar --</option>';
         
-        // Normalizamos claves (SheetDB respeta mayúsculas/minúsculas de tus encabezados)
-        // Asegúrate que en tu Excel la columna se llame "Codigo" (primera letra mayúscula)
+        // --- CORRECCIÓN DE NOMBRES SEGÚN TU IMAGEN ---
+        // Buscamos CODIGO, DESCRIPCION, ENERO (todo mayúsculas)
         
-// --- CORRECCIÓN: Búsqueda inteligente de columnas ---
         budget.forEach(b => {
-            // Buscamos la columna sin importar mayúsculas/minúsculas
-            // Intentamos: "CODIGO", "Codigo", "codigo", "Código"
-            const code = b.CODIGO || b.Codigo || b.codigo || b["Código"];
-            const desc = b.DESCRIPCION || b.Descripcion || b.descripcion || b["Descripción"] || "";
+            // Intenta mayúsculas (tu caso real) o Capitalizado
+            const code = b.CODIGO || b.Codigo || b.codigo; 
+            const desc = b.DESCRIPCION || b.Descripcion || b.descripcion || "";
             
-            // Solo agregamos si encontramos un código válido
-            if (code) {
+            if(code) {
                 const o = document.createElement('option');
                 o.value = code;
-                o.text = `${code} - ${desc.substring(0, 30)}`;
+                o.text = `${code} - ${desc.substring(0,30)}`;
                 sel.appendChild(o);
             }
         });
 
-        // Mapa de Gastos
         const expMap = {};
         let tSpent = 0;
         expenses.forEach(x => {
@@ -187,56 +182,42 @@
             tSpent += Number(x.amount);
         });
 
-        // Matriz
         const tb = document.querySelector('#mainTable tbody');
         tb.innerHTML = '';
         let tBud = 0;
         
-        const monthsKeys = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]; // Ajusta según tus encabezados en Excel
-
-// --- CORRECCIÓN TABLA: Búsqueda inteligente de meses ---
-        const monthKeys = [
-            ["Ene", "ENE", "January"], ["Feb", "FEB", "February"], ["Mar", "MAR", "March"],
-            ["Abr", "ABR", "April"], ["May", "MAY", "May"], ["Jun", "JUN", "June"],
-            ["Jul", "JUL", "July"], ["Ago", "AGO", "August"], ["Sep", "SEP", "September"],
-            ["Oct", "OCT", "October"], ["Nov", "NOV", "November"], ["Dic", "DIC", "December"]
-        ];
+        // TUS MESES SEGÚN TU IMAGEN (Mayúsculas completas)
+        const monthKeys = ["ENERO","FEBRERO","MARZO","ABRIL","MAYO","JUNIO","JULIO","AGOSTO","SEPTIEMBRE","OCTUBRE","NOVIEMBRE","DICIEMBRE"];
 
         budget.forEach(l => {
-            const code = l.CODIGO || l.Codigo || l.codigo || l["Código"];
-            if (!code) return; // Si no hay código, saltamos
-
-            // Buscar Total
-            const totalVal = l.TOTAL || l.Total || l.total || 0;
-            tBud += Number(totalVal);
-
+            const code = l.CODIGO || l.Codigo || l.codigo;
+            if(!code) return;
+            
+            // Busca Total (o lo calcula si no existe columna Total)
+            let total = Number(l.TOTAL || l.Total || 0);
+            
             const tr = document.createElement('tr');
-            const desc = l.DESCRIPCION || l.Descripcion || l.descripcion || "";
-            let h = `<td><b>${code}</b><br><small>${desc.substring(0, 20)}</small></td>`;
-
-            for (let i = 0; i < 12; i++) {
-                // Buscar el valor del mes probando varios nombres posibles
-                let val = 0;
-                for (const key of monthKeys[i]) {
-                    if (l[key] !== undefined) {
-                        val = l[key];
-                        break;
-                    }
-                }
+            let h = `<td><b>${code}</b></td>`;
+            
+            let sumMonths = 0;
+            for(let i=0; i<12; i++) {
+                // Buscar el valor usando el nombre del mes en MAYÚSCULAS
+                let rawVal = l[monthKeys[i]] || l[Object.keys(l)[i+2]] || "0";
+                // Limpiar puntos de miles (ej: "37.165.994" -> 37165994)
+                if(typeof rawVal === 'string') rawVal = rawVal.replace(/\./g, '').replace(/,/g, '.');
                 
-                // Limpieza de números (quita puntos de mil si vienen como texto)
-                if (typeof val === 'string') val = val.replace(/\./g, '').replace(/,/g, '.');
-                let b = Number(val) || 0;
+                let b = Number(rawVal) || 0;
+                sumMonths += b;
                 
-                const s = expMap[`${code}-${i}`] || 0;
-                const bg = (new Date().getMonth() === i) ? 'style="background:#f0fbf7"' : '';
-                
-                h += `<td ${bg}>
-                    ${b !== 0 ? fmt(b) : '-'}
-                    <br><span style="color:${s ? 'red' : '#ccc'}">${s ? fmt(s) : ''}</span>
-                </td>`;
+                let s = expMap[`${code}-${i}`]||0;
+                h += `<td>${b?fmt(b):'-'}<br><span style="color:${s?'red':'#ccc'}">${s?fmt(s):''}</span></td>`;
             }
-            h += `<td><b>${fmt(totalVal)}</b></td>`;
+            
+            // Si la columna Total viene vacía, usamos la suma calculada
+            if(total === 0) total = sumMonths;
+            tBud += total;
+
+            h += `<td><b>${fmt(total)}</b></td>`;
             tr.innerHTML = h;
             tb.appendChild(tr);
         });
@@ -245,7 +226,6 @@
         document.getElementById('kAvail').innerText = fmt(tBud-tSpent);
         document.getElementById('kPerc').innerText = tBud>0 ? ((tSpent/tBud)*100).toFixed(1)+"%" : "0%";
 
-        // Historial
         const th = document.querySelector('#histTable tbody');
         th.innerHTML = '';
         [...expenses].sort((a,b)=>b.id-a.id).slice(0,10).forEach(x => {
@@ -259,4 +239,3 @@
 </script>
 </body>
 </html>
-
