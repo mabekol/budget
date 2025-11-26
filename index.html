@@ -176,26 +176,66 @@
         }
     }
 
-    // --- SINCRONIZACIÓN ---
+// --- SINCRONIZACIÓN MODO DIAGNÓSTICO ---
     async function syncData() {
         showLoader(true);
+        const kpiDisplay = document.getElementById('kpiTotal');
+        
         try {
-            // Pedimos presupuesto
-            const dataB = await apiCall('readData', { sheetName: 'Presupuesto' });
-            budget = Array.isArray(dataB) ? dataB : [];
+            // Imprimimos en pantalla que estamos intentando...
+            kpiDisplay.innerText = "Conectando...";
+            
+            // Verificar que la URL no esté vacía
+            if(API_URL.includes("PEGAR_AQUI") || API_URL.length < 10) {
+                throw new Error("La URL del script no se ha configurado en el código.");
+            }
 
-            // Pedimos gastos
-            const dataE = await apiCall('readData', { sheetName: 'Gastos' });
+            // Intento de conexión
+            const resB = await fetch(API_URL, {
+                method: "POST",
+                redirect: "follow",
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify({ action: 'readData', sheetName: 'Presupuesto' })
+            });
+
+            if (!resB.ok) {
+                throw new Error(`Error HTTP: ${resB.status} ${resB.statusText}`);
+            }
+
+            const textResponse = await resB.text(); // Leemos como texto primero para ver si es error HTML
+            
+            let dataB;
+            try {
+                dataB = JSON.parse(textResponse);
+            } catch (e) {
+                console.log("Respuesta recibida:", textResponse);
+                throw new Error("Google devolvió texto en vez de datos (Revisa la URL)");
+            }
+
+            if (dataB.error) throw new Error(dataB.error);
+
+            budget = Array.isArray(dataB) ? dataB : [];
+            
+            // Si llegamos aquí, funcionó el presupuesto, vamos por los gastos
+            const resE = await fetch(API_URL, {
+                method: "POST",
+                redirect: "follow",
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify({ action: 'readData', sheetName: 'Gastos' })
+            });
+            const dataE = await resE.json();
             expenses = Array.isArray(dataE) ? dataE : [];
 
-            renderUI();
+            renderUI(); // Si todo sale bien, se pinta la tabla
+
         } catch (err) {
-            document.getElementById('kpiTotal').innerText = "Error Conexión";
-            // Si es la primera carga, no molestamos con alerta, solo log
+            console.error(err);
+            // AQUÍ ESTÁ LA CLAVE: Mostramos el error en grande
+            kpiDisplay.innerHTML = `<span style="color:red; font-size:0.5em">${err.message}</span>`;
+            alert("FALLO: " + err.message);
         }
         showLoader(false);
     }
-
     // --- ACCIONES ---
     async function addExpense(e) {
         e.preventDefault();
@@ -362,4 +402,5 @@
 </script>
 </body>
 </html>
+
 
