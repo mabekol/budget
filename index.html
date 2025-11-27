@@ -3,13 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Saint Aubin International - Control Presupuestal</title>
+    <title>Saint Aubin International - Control Gerencial</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
     <style>
-        /* === IDENTIDAD VISUAL SAINT AUBIN === */
+        /* === ESTILOS G&C === */
         :root {
             --primary: #002B5C;       /* Azul Oscuro Corporativo */
             --accent: #00A3E0;        /* Azul Celeste Brillante */
-            --bg: #F4F7FA;            /* Fondo Gris Azulado muy claro */
+            --bg: #F4F7FA;            /* Fondo Gris Azulado */
             --white: #ffffff;
             --text: #2C3E50;
             --danger: #D32F2F;
@@ -27,14 +29,14 @@
         
         /* CARDS */
         .card { background: var(--white); padding: 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,43,92,0.08); margin-bottom: 20px; border: 1px solid #e1e8ed; }
-        .card h2 { margin-top: 0; color: var(--primary); font-size: 1.1rem; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; text-transform: uppercase; font-weight: 700; }
+        .card h2 { margin-top: 0; color: var(--primary); font-size: 1.1rem; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; text-transform: uppercase; font-weight: 700; display:flex; justify-content:space-between; align-items:center; }
         .card.transfer-zone { border-top: 4px solid var(--warning); }
         .card.transfer-zone h2 { color: var(--warning); }
 
         /* LAYOUT */
         .grid { display: grid; grid-template-columns: 1fr 1.5fr; gap: 25px; }
-        .grid-transfer { display: grid; grid-template-columns: 1fr 1.5fr; gap: 25px; }
-        @media(max-width:900px){ .grid, .grid-transfer { grid-template-columns: 1fr; } }
+        .grid-dashboard { display: grid; grid-template-columns: 1fr 2fr; gap: 25px; margin-bottom: 25px; }
+        @media(max-width:900px){ .grid, .grid-dashboard { grid-template-columns: 1fr; } }
         
         /* INPUTS */
         input, select { width: 100%; padding: 12px; border: 1px solid #ccd6dd; border-radius: 4px; margin-bottom: 15px; box-sizing: border-box; font-size: 14px; transition: 0.2s; }
@@ -46,12 +48,13 @@
         button.primary { background: var(--primary); color: white; }
         button.accent { background: var(--accent); color: white; width: 100%; font-size: 1em; }
         button.warning { background: var(--warning); color: white; width: 100%; }
+        button.success { background: var(--success); color: white; font-size: 0.8em; padding: 8px 15px; }
         button.danger { background: var(--danger); color: white; padding: 4px 8px; font-size: 0.75em; border-radius: 3px; }
         button:hover { opacity: 0.9; transform: translateY(-1px); }
         button:disabled { background: #bdc3c7; cursor: not-allowed; transform: none; }
 
         /* KPIS */
-        .kpi-box { display: flex; justify-content: space-around; text-align: center; padding: 20px; background: linear-gradient(to right, #ffffff, #f8fbff); }
+        .kpi-box { display: flex; justify-content: space-around; text-align: center; padding: 20px; background: linear-gradient(to right, #ffffff, #f8fbff); border-left: 5px solid var(--accent); }
         .kpi-item small { color: #7f8c8d; font-weight: 700; text-transform: uppercase; font-size: 0.75em; letter-spacing: 1px; }
         .kpi-val { font-size: 2rem; font-weight: 800; color: var(--primary); margin-top: 5px; }
         
@@ -65,15 +68,21 @@
         /* Badges */
         .badge-transfer { background: #fff3e0; color: #e67e22; padding: 4px 8px; border-radius: 12px; font-weight: bold; font-size: 0.85em; border: 1px solid #ffe0b2; }
 
-        /* LOADER */
-        #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999; }
+        /* LOADER & MODAL */
+        #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 999; display: none; }
         .spinner { width: 40px; height: 40px; border: 4px solid #ecf0f1; border-top: 4px solid var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 15px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,43,92,0.6); display:none; justify-content:center; align-items:center; z-index:1000; backdrop-filter: blur(3px); }
+        .modal { background: white; padding: 30px; border-radius: 8px; width: 90%; max-width: 450px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); border-top: 6px solid var(--danger); animation: slideDown 0.3s ease; }
+        @keyframes slideDown { from {transform: translateY(-30px); opacity:0;} to {transform: translateY(0); opacity:1;} }
+        
+        .transfer-box { background: #fff5f5; padding: 15px; border-radius: 5px; border: 1px solid #fed7d7; margin-top: 15px; }
     </style>
 </head>
 <body>
 
-<div id="loginScreen" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#002B5C; z-index:9998; display:flex; flex-direction:column; justify-content:center; align-items:center; color:white;">
+<div id="loginScreen" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#002B5C; z-index:9999; display:flex; flex-direction:column; justify-content:center; align-items:center; color:white;">
     <h1 style="color:#00A3E0; margin-bottom:10px;">Saint Aubin <span style="color:white">Intranet</span></h1>
     <p style="opacity:0.8; margin-bottom:20px;">Ingreso exclusivo personal autorizado</p>
     <input type="password" id="passInput" placeholder="Contraseña de acceso" style="width:250px; text-align:center; padding:15px; border-radius:30px; border:none;">
@@ -81,27 +90,47 @@
     <p id="loginMsg" style="color:#ff6b6b; margin-top:15px; display:none; font-weight:bold;">⚠️ Contraseña Incorrecta</p>
 </div>
 
-<div id="loader" style="display:none;">
+<script>
+    function checkPass() {
+        const p = document.getElementById('passInput').value;
+        if(p === "SaintAubin2025") {
+            document.getElementById('loginScreen').style.display = 'none';
+            localStorage.setItem('auth', 'true');
+            unlockApp(); 
+        } else {
+            document.getElementById('loginMsg').style.display = 'block';
+        }
+    }
+    function logout() {
+        localStorage.removeItem('auth');
+        location.reload();
+    }
+    if(localStorage.getItem('auth') === 'true') {
+        document.getElementById('loginScreen').style.display = 'none';
+    }
+</script>
+
+<div id="loader">
     <div class="spinner"></div>
     <h3 style="color:var(--primary)">Procesando...</h3>
     <p id="loadMsg" style="color:#7f8c8d">Conectando con base de datos segura...</p>
 </div>
 
-<div id="alertModal" style="position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); display:none; justify-content:center; align-items:center; z-index:1000;">
-    <div style="background: white; padding: 25px; border-radius: 10px; width: 90%; max-width: 450px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); border-top: 5px solid var(--danger);">
-        <h3 style="color:var(--danger); margin-top:0;">⚠️ Saldo Insuficiente</h3>
-        <p>No tienes fondos en <b id="modalTargetMonth"></b>.</p>
-        <p>Faltan: <b id="modalMissing" style="color:var(--danger)"></b></p>
+<div id="alertModal" class="modal-overlay">
+    <div class="modal">
+        <h3>⚠️ Saldo Insuficiente</h3>
+        <p style="margin-bottom:5px;">El rubro no tiene fondos en <b id="modalTargetMonth" style="color:var(--primary)"></b>.</p>
+        <p>Faltante: <b id="modalMissing" style="color:var(--danger); font-size:1.2em;"></b></p>
         
-        <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; border: 1px solid #eee; margin-top: 15px;">
-            <label>Trasladar fondos desde:</label>
-            <select id="modalSourceMonth"></select>
-            <small style="color:#666">Meses con saldo disponible.</small>
+        <div class="transfer-box">
+            <label style="color:var(--danger)">Autorizar traslado desde:</label>
+            <select id="modalSourceMonth" style="background:white;"></select>
+            <small style="color:#c0392b">Se descontará del mes seleccionado.</small>
         </div>
         
-        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
-            <button onclick="closeModal()" style="background:#ccc; color:#333">Cancelar</button>
-            <button onclick="executeTransfer()" class="accent">✅ Autorizar Traslado</button>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:25px;">
+            <button onclick="closeModal()" style="background:#ecf0f1; color:#7f8c8d">Cancelar</button>
+            <button onclick="executeTransfer()" class="accent" style="background:var(--success)">✅ Autorizar y Guardar</button>
         </div>
     </div>
 </div>
@@ -117,100 +146,110 @@
         </div>
     </div>
 
-    <div class="card kpi-box">
-        <div class="kpi-item"><small>Presupuesto Total</small><div class="kpi-val" id="kTotal">$0</div></div>
-        <div class="kpi-item"><small>Disponible Real</small><div class="kpi-val" id="kAvail">$0</div></div>
-        <div class="kpi-item"><small>% Ejecución</small><div class="kpi-val" id="kPerc" style="color:var(--accent)">0%</div></div>
+    <div class="grid-dashboard">
+        <div class="card kpi-box" style="flex-direction:column; justify-content:center; gap:20px;">
+            <div class="kpi-item"><small>Presupuesto Total</small><div class="kpi-val" id="kTotal">$0</div></div>
+            <div class="kpi-item"><small>Disponible Real</small><div class="kpi-val" id="kAvail">$0</div></div>
+            <div class="kpi-item"><small>% Ejecución</small><div class="kpi-val" id="kPerc" style="color:var(--accent)">0%</div></div>
+        </div>
+
+        <div class="card">
+            <h2>Tendencia Mensual</h2>
+            <div style="position: relative; height:200px; width:100%">
+                <canvas id="budgetChart"></canvas>
+            </div>
+        </div>
     </div>
 
     <div class="grid">
-        <div>
-            <div class="card">
-                <h2>1. Registrar Gasto</h2>
-                <form onsubmit="tryAddExpense(event)">
-                    <div style="margin-bottom:5px;">
-                        <label>Solicitante</label>
-                        <select id="uName" required>
-                            <option value="JIAT" selected>JIAT</option>
-                            <option value="MBR">MBR</option>
-                        </select>
+        <div class="card">
+            <h2>Registrar Nuevo Gasto</h2>
+            <form onsubmit="tryAddExpense(event)">
+                <div style="margin-bottom:5px;">
+                    <label>Solicitante</label>
+                    <select id="uName" required>
+                        <option value="JIAT" selected>JIAT</option>
+                        <option value="MBR">MBR</option>
+                    </select>
+                </div>
+                
+                <label>Rubro Presupuestal</label>
+                <select id="selCode" required><option>Cargando códigos...</option></select>
+                
+                <label>Concepto / Referencia</label>
+                <input type="text" id="ref" placeholder="Ej: Factura 123 - Compra Insumos" required>
+                
+                <div style="display:flex; gap:15px;">
+                    <div style="flex:1">
+                        <label>Monto ($)</label>
+                        <input type="text" id="amtDisplay" placeholder="0" required oninput="formatCurrencyInput(this)" style="font-weight:bold; color:var(--primary);">
                     </div>
-                    
-                    <label>Rubro Presupuestal</label>
-                    <select id="selCode" required><option>Cargando códigos...</option></select>
-                    
-                    <label>Concepto / Referencia</label>
-                    <input type="text" id="ref" placeholder="Ej: Factura 123" required>
-                    
-                    <div style="display:flex; gap:15px;">
-                        <div style="flex:1">
-                            <label>Monto ($)</label>
-                            <input type="text" id="amtDisplay" placeholder="0" required oninput="formatCurrencyInput(this)" style="font-weight:bold; color:var(--primary);">
-                        </div>
-                        <div style="flex:1">
-                            <label>Fecha</label>
-                            <input type="date" id="date" required>
-                        </div>
+                    <div style="flex:1">
+                        <label>Fecha</label>
+                        <input type="date" id="date" required>
                     </div>
-                    <button type="submit" id="btnSave" class="accent">Registrar Gasto</button>
-                </form>
-            </div>
-
-            <div class="card transfer-zone">
-                <h2>2. Módulo de Traslados</h2>
-                <form onsubmit="handleTransfer(event)">
-                    <label>Rubro a Modificar</label>
-                    <select id="selCodeTransfer" required><option>Cargando...</option></select>
-
-                    <div style="display:flex; gap:10px;">
-                        <div style="flex:1">
-                            <label>Origen (Saca)</label>
-                            <select id="monthSource" required></select>
-                        </div>
-                        <div style="flex:1">
-                            <label>Destino (Pone)</label>
-                            <select id="monthTarget" required></select>
-                        </div>
-                    </div>
-
-                    <label>Valor a Trasladar ($)</label>
-                    <input type="text" id="amtTransfer" placeholder="0" required oninput="formatCurrencyInput(this)" style="color:var(--warning); font-weight:bold;">
-
-                    <button type="submit" class="warning">Autorizar Traslado</button>
-                </form>
-            </div>
+                </div>
+                <button type="submit" id="btnSave" class="accent">Validar Disponibilidad</button>
+            </form>
         </div>
 
-        <div>
-            <div class="card">
-                <h2>Historial de Gastos</h2>
-                <div class="table-wrap" style="max-height:380px">
-                    <table id="histTable">
-                        <thead><tr><th>Fecha</th><th>Cód</th><th>Solicitante</th><th>Concepto</th><th>Monto</th><th></th></tr></thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div class="card transfer-zone">
-                <h2>Bitácora de Auditoría</h2>
-                <div class="table-wrap" style="max-height:300px">
-                    <table id="transfersTable">
-                        <thead><tr><th>Fecha</th><th>Código</th><th>Movimiento</th><th>Valor</th><th>Autorizó</th></tr></thead>
-                        <tbody><tr><td colspan="5" style="text-align:center; color:#999;">Cargando...</td></tr></tbody>
-                    </table>
-                </div>
+        <div class="card">
+            <h2>Últimos Gastos</h2>
+            <div class="table-wrap" style="max-height:380px">
+                <table id="histTable">
+                    <thead><tr><th>Fecha</th><th>Cód</th><th>Solicitante</th><th>Concepto</th><th>Monto</th><th></th></tr></thead>
+                    <tbody></tbody>
+                </table>
             </div>
         </div>
     </div>
 
     <div class="card">
-        <h2>Ejecución Presupuestal Mensual</h2>
+        <h2>
+            Ejecución Presupuestal Mensual
+            <button onclick="downloadExcel()" class="success">📥 Exportar Excel</button>
+        </h2>
         <div class="table-wrap">
             <table id="mainTable">
                 <thead><tr><th>Cód</th><th>Ene</th><th>Feb</th><th>Mar</th><th>Abr</th><th>May</th><th>Jun</th><th>Jul</th><th>Ago</th><th>Sep</th><th>Oct</th><th>Nov</th><th>Dic</th><th>Total</th></tr></thead>
                 <tbody></tbody>
             </table>
+        </div>
+    </div>
+
+    <div class="grid-transfer">
+        <div class="card transfer-zone">
+            <h2>Módulo de Traslados</h2>
+            <form onsubmit="handleTransfer(event)">
+                <label>Rubro a Modificar</label>
+                <select id="selCodeTransfer" required><option>Cargando...</option></select>
+
+                <div style="display:flex; gap:10px;">
+                    <div style="flex:1">
+                        <label>Origen (Saca)</label>
+                        <select id="monthSource" required></select>
+                    </div>
+                    <div style="flex:1">
+                        <label>Destino (Pone)</label>
+                        <select id="monthTarget" required></select>
+                    </div>
+                </div>
+
+                <label>Valor a Trasladar ($)</label>
+                <input type="text" id="amtTransfer" placeholder="0" required oninput="formatCurrencyInput(this)" style="color:var(--warning); font-weight:bold;">
+
+                <button type="submit" class="warning">Autorizar Traslado</button>
+            </form>
+        </div>
+
+        <div class="card transfer-zone">
+            <h2>Bitácora de Auditoría</h2>
+            <div class="table-wrap" style="max-height:300px">
+                <table id="transfersTable">
+                    <thead><tr><th>Fecha</th><th>Código</th><th>Movimiento</th><th>Valor</th><th>Autorizó</th></tr></thead>
+                    <tbody><tr><td colspan="5" style="text-align:center; color:#999;">Cargando...</td></tr></tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>
@@ -223,6 +262,7 @@
 
     let budget = [], expenses = [], transfers = [];
     let DETECTED_HEADERS = new Array(12).fill(null); 
+    let myChart = null; // Variable para la gráfica
     
     const MONTH_POSSIBILITIES = [
         ["ENERO","Enero","ENE","JAN","January"], ["FEBRERO","Febrero","FEB","February"], ["MARZO","Marzo","MAR","March"],
@@ -231,53 +271,34 @@
         ["OCTUBRE","Octubre","OCT","October"], ["NOVIEMBRE","Noviembre","NOV","November"], ["DICIEMBRE","Diciembre","DIC","December"]
     ];
     const MONTH_LABELS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-
-    function checkPass() {
-        const p = document.getElementById('passInput').value;
-        if(p === "SaintAubin2025") {
-            localStorage.setItem('auth', 'true');
-            unlockApp();
-        } else {
-            document.getElementById('loginMsg').style.display = 'block';
-        }
-    }
+    let pendingExpense = null;
 
     function unlockApp() {
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('mainContainer').style.display = 'block';
-        
-        // Cargar usuario guardado
         const u = localStorage.getItem('u');
-        if(u === "JIAT" || u === "MBR") document.getElementById('uName').value = u;
-        
+        if(u) {
+             const uSelect = document.getElementById('uName');
+             if (u === "JIAT" || u === "MBR") uSelect.value = u;
+        }
         document.getElementById('date').valueAsDate = new Date();
         populateMonthSelects();
         syncData(true);
     }
 
-    function logout() {
-        localStorage.removeItem('auth');
-        location.reload();
+    if(localStorage.getItem('auth') === 'true') {
+        document.addEventListener('DOMContentLoaded', unlockApp);
     }
-
-    // Lógica de inicio
-    document.addEventListener('DOMContentLoaded', () => {
-        if(localStorage.getItem('auth') === 'true') {
-            unlockApp();
-        }
-    });
 
     function populateMonthSelects() {
         const s1 = document.getElementById('monthSource');
         const s2 = document.getElementById('monthTarget');
         s1.innerHTML = '<option value="">Sel. Mes</option>';
         s2.innerHTML = '<option value="">Sel. Mes</option>';
-        
         MONTH_LABELS.forEach((m, i) => {
             const op1 = document.createElement('option'); op1.value = i; op1.text = m;
             const op2 = document.createElement('option'); op2.value = i; op2.text = m;
-            s1.appendChild(op1);
-            s2.appendChild(op2);
+            s1.appendChild(op1); s2.appendChild(op2);
         });
     }
 
@@ -288,8 +309,7 @@
         input.value = new Intl.NumberFormat('es-CO').format(parseInt(val));
     }
     function getAmountValue(id) {
-        const el = document.getElementById(id);
-        return parseFloat(el.value.replace(/\./g, '')) || 0;
+        return parseFloat(document.getElementById(id).value.replace(/\./g, '')) || 0;
     }
     function getSmartValue(obj, keys) {
         if(!obj) return undefined;
@@ -309,11 +329,109 @@
         });
     }
 
+    // --- EXPORTAR A EXCEL ---
+    function downloadExcel() {
+        let csv = "Codigo,Ene,Feb,Mar,Abr,May,Jun,Jul,Ago,Sep,Oct,Nov,Dic,Total\n";
+        
+        budget.forEach(l => {
+            const code = getSmartValue(l, ["CODIGO","Codigo"]);
+            if(!code) return;
+            let row = [code];
+            let total = 0;
+            
+            // Calculamos saldo actual (Presupuesto - Gastos)
+            for(let i=0; i<12; i++) {
+                let rawBud = getSmartValue(l, MONTH_POSSIBILITIES[i]) || "0";
+                if(typeof rawBud === 'string') rawBud = rawBud.replace(/\./g,'').replace(/,/g,'.');
+                let bud = parseFloat(rawBud) || 0;
+                
+                let spent = 0;
+                expenses.forEach(x => {
+                    if (x.code == code && (parseInt(x.date.split('-')[1])-1) == i) {
+                        spent += parseFloat(x.amount);
+                    }
+                });
+                
+                row.push(bud - spent); // Exportamos SALDO DISPONIBLE
+                total += (bud - spent);
+            }
+            row.push(total);
+            csv += row.join(",") + "\n";
+        });
+
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", "Ejecucion_Presupuestal.csv");
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    // --- GRÁFICA (DASHBOARD) ---
+    function updateChart() {
+        const ctx = document.getElementById('budgetChart').getContext('2d');
+        
+        // Arrays para datos de la gráfica (12 meses)
+        let monthlyBudget = new Array(12).fill(0);
+        let monthlyExpenses = new Array(12).fill(0);
+
+        // 1. Sumar Presupuestos por Mes
+        budget.forEach(l => {
+            for(let i=0; i<12; i++) {
+                let rawVal = getSmartValue(l, MONTH_POSSIBILITIES[i]) || "0";
+                if(typeof rawVal === 'string') rawVal = rawVal.replace(/\./g,'').replace(/,/g,'.');
+                monthlyBudget[i] += (parseFloat(rawVal) || 0);
+            }
+        });
+
+        // 2. Sumar Gastos por Mes
+        expenses.forEach(x => {
+            if(!x.date) return;
+            const mIdx = parseInt(x.date.split('-')[1]) - 1;
+            if(mIdx >= 0 && mIdx < 12) {
+                monthlyExpenses[mIdx] += (parseFloat(x.amount) || 0);
+            }
+        });
+
+        // 3. Dibujar/Actualizar
+        if(myChart) myChart.destroy();
+        
+        myChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: MONTH_LABELS,
+                datasets: [
+                    {
+                        label: 'Ejecutado',
+                        data: monthlyExpenses,
+                        backgroundColor: '#00A3E0'
+                    },
+                    {
+                        label: 'Presupuesto Total',
+                        data: monthlyBudget,
+                        backgroundColor: '#002B5C',
+                        hidden: true // Oculto por defecto para limpieza
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true }
+                }
+            }
+        });
+    }
+
     // --- SINCRONIZACIÓN ---
     async function syncData(showLoaderUI = false) {
         if(showLoaderUI) {
             document.getElementById('loader').style.display = 'flex';
-            document.getElementById('loadMsg').innerText = "Sincronizando base de datos...";
+            document.getElementById('loadMsg').innerText = "Sincronizando...";
         }
         
         let attempts = 0;
@@ -336,6 +454,7 @@
                 transfers = await resT.json();
 
                 renderUI();
+                updateChart(); // Actualizar gráfica
                 success = true;
             } catch (e) {
                 console.warn("Intento fallido:", e);
@@ -343,11 +462,13 @@
             }
         }
         
-        if(!success && showLoaderUI) alert("⚠️ No se pudieron cargar los datos. Intenta 'Actualizar' nuevamente.");
+        if(!success && showLoaderUI) alert("⚠️ No se pudieron cargar los datos.");
         if(showLoaderUI) document.getElementById('loader').style.display = 'none';
     }
 
-    // --- REGISTRAR GASTO ---
+    // --- LOGICA DE NEGOCIO (Sin cambios estructurales, solo integración) ---
+    // (Las funciones tryAddExpense, executeTransfer, saveExpense se mantienen igual a la versión anterior funcional)
+    
     async function tryAddExpense(e) {
         e.preventDefault();
         const btn = document.getElementById('btnSave');
@@ -365,7 +486,7 @@
         
         if (!line) {
             alert("Código no encontrado");
-            btn.disabled = false; btn.innerText = "Registrar Gasto";
+            btn.disabled = false; btn.innerText = "Validar y Guardar";
             return;
         }
 
@@ -379,22 +500,18 @@
             const xCode = getSmartValue(x, ["code", "Code", "Codigo", "CODIGO"]);
             const xDate = getSmartValue(x, ["date", "Date", "Fecha", "FECHA"]);
             const xAmt = parseFloat(getSmartValue(x, ["amount", "Amount", "Monto", "MONTO"])) || 0;
-
-            if (xCode == code && xDate && (parseInt(xDate.split('-')[1])-1) == monthIdx) {
-                spentMonth += xAmt;
-            }
+            if (xCode == code && xDate && (parseInt(xDate.split('-')[1])-1) == monthIdx) spentMonth += xAmt;
         });
 
         if (amount > (budgetMonth - spentMonth)) {
             const missing = amount - (budgetMonth - spentMonth);
-            alert(`⛔ SALDO INSUFICIENTE\n\nRubro: ${code}\nMes: ${MONTH_LABELS[monthIdx]}\nDisponible: ${fmt(budgetMonth - spentMonth)}\nFaltan: ${fmt(missing)}\n\nPor favor realiza un traslado en el Módulo de Traslados (abajo) antes de registrar el gasto.`);
-            btn.disabled = false; btn.innerText = "Registrar Gasto";
+            alert(`⛔ SALDO INSUFICIENTE\n\nRubro: ${code}\nMes: ${MONTH_LABELS[monthIdx]}\nDisponible: ${fmt(budgetMonth - spentMonth)}\nFaltan: ${fmt(missing)}\n\nPor favor realiza un traslado en el Módulo de Traslados (abajo).`);
+            btn.disabled = false; btn.innerText = "Validar y Guardar";
         } else {
             saveExpense(code, ref, amount, dateStr);
         }
     }
 
-    // --- GESTIÓN DE TRASLADOS ---
     async function handleTransfer(e) {
         e.preventDefault();
         const code = document.getElementById('selCodeTransfer').value;
@@ -430,14 +547,12 @@
             const xCode = getSmartValue(x, ["code", "Code", "Codigo", "CODIGO"]);
             const xDate = getSmartValue(x, ["date", "Date", "Fecha", "FECHA"]);
             const xAmt = parseFloat(getSmartValue(x, ["amount", "Amount", "Monto", "MONTO"])) || 0;
-            if (xCode == code && xDate && (parseInt(xDate.split('-')[1])-1) == sourceIdx) {
-                spentSource += xAmt;
-            }
+            if (xCode == code && xDate && (parseInt(xDate.split('-')[1])-1) == sourceIdx) spentSource += xAmt;
         });
 
         if (amount > (budgetSource - spentSource)) {
             document.getElementById('loader').style.display = 'none';
-            return alert(`⛔ Fondos insuficientes en el mes de origen (${MONTH_LABELS[sourceIdx]}).\nDisponible: ${fmt(budgetSource - spentSource)}`);
+            return alert(`⛔ Fondos insuficientes en origen (${MONTH_LABELS[sourceIdx]}).\nDisponible: ${fmt(budgetSource - spentSource)}`);
         }
 
         try {
@@ -473,11 +588,7 @@
             });
 
             alert("✅ Traslado Exitoso.");
-            
-            document.getElementById('monthSource').value = "";
-            document.getElementById('monthTarget').value = "";
             document.getElementById('amtTransfer').value = "";
-            
             syncData(true);
 
         } catch (e) {
@@ -486,7 +597,6 @@
         }
     }
 
-    // --- GUARDAR GASTO ---
     async function saveExpense(code, ref, amount, date) {
         document.getElementById('loader').style.display = 'flex';
         document.getElementById('loadMsg').innerText = "Guardando gasto...";
@@ -513,24 +623,23 @@
             if (!res.ok) throw new Error("Error al guardar");
 
             await syncData(false);
-            
             document.getElementById('ref').value = "";
             document.getElementById('amtDisplay').value = "";
             document.getElementById('loader').style.display = 'none';
             const btn = document.getElementById('btnSave');
-            btn.disabled = false; btn.innerText = "Registrar Gasto";
-            alert("✅ Gasto registrado correctamente.");
+            btn.disabled = false; btn.innerText = "Validar y Guardar";
+            alert("✅ Gasto registrado.");
 
         } catch(e) {
             document.getElementById('loader').style.display = 'none';
             const btn = document.getElementById('btnSave');
-            btn.disabled = false; btn.innerText = "Registrar Gasto";
+            btn.disabled = false; btn.innerText = "Validar y Guardar";
             alert("Error: " + e.message);
         }
     }
 
     async function delExp(id) {
-        if(!confirm("¿Borrar este registro?")) return;
+        if(!confirm("¿Borrar registro?")) return;
         document.getElementById('loader').style.display = 'flex';
         try {
             await fetch(`${API_URL}/id/${id}?sheet=Gastos`, { method: 'DELETE' });
@@ -553,8 +662,7 @@
                 const txt = `${code} - ${desc.substring(0,35)}`;
                 const o1 = document.createElement('option'); o1.value = code; o1.text = txt;
                 const o2 = document.createElement('option'); o2.value = code; o2.text = txt;
-                sel1.appendChild(o1);
-                sel2.appendChild(o2);
+                sel1.appendChild(o1); sel2.appendChild(o2);
             }
         });
         if(c1) sel1.value = c1;
@@ -584,8 +692,7 @@
             let h = `<td><b>${code}</b></td>`;
             let rowSum = 0;
             for(let i=0; i<12; i++) {
-                const header = DETECTED_HEADERS[i];
-                let rawVal = header ? l[header] : "0";
+                let rawVal = getSmartValue(l, MONTH_POSSIBILITIES[i]) || "0";
                 if(typeof rawVal === 'string') rawVal = rawVal.replace(/\./g, '').replace(/,/g, '.');
                 let b = Number(rawVal) || 0;
                 rowSum += b;
@@ -624,7 +731,7 @@
         if(!transfers || transfers.length === 0) {
             tt.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">Sin movimientos</td></tr>';
         } else {
-            [...transfers].reverse().slice(0,10).forEach(t => {
+            [...transfers].reverse().forEach(t => {
                 const r = document.createElement('tr');
                 const date = getSmartValue(t, ["Fecha","FECHA"]);
                 const cod = getSmartValue(t, ["Codigo","CODIGO"]);
