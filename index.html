@@ -32,7 +32,6 @@
         .card h2 { margin-top: 0; color: var(--primary); font-size: 1.1rem; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; text-transform: uppercase; font-weight: 700; }
         .card.transfer-zone { border-top: 4px solid var(--warning); }
         .card.transfer-zone h2 { color: var(--warning); }
-        /* Estilo para la zona de análisis */
         .card.analysis-zone { border-top: 4px solid var(--primary); background: #fbfdff; }
 
         /* LAYOUT */
@@ -67,13 +66,17 @@
         th { background: var(--primary); color: white; padding: 12px 10px; text-align: left; font-weight: 600; white-space: nowrap; position: sticky; top: 0; z-index: 10; }
         td { padding: 10px; border-bottom: 1px solid #f0f4f8; color: #34495e; }
         tr:hover { background-color: #f9fcff; }
-        
-        /* Badges */
-        .badge-transfer { background: #fff3e0; color: #e67e22; padding: 4px 8px; border-radius: 12px; font-weight: bold; font-size: 0.85em; border: 1px solid #ffe0b2; }
 
-        /* PROGRESS BAR */
-        .progress-bg { width: 100%; background: #e0e0e0; height: 10px; border-radius: 5px; margin-top: 5px; overflow: hidden; }
-        .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.5s; }
+        /* TOOLTIPS */
+        .tooltip-container { position: relative; display: inline-block; cursor: help; border-bottom: 1px dashed var(--accent); }
+        .tooltip-text { visibility: hidden; width: 250px; background-color: #002B5C; color: #fff; text-align: left; border-radius: 6px; padding: 10px; position: absolute; z-index: 100; bottom: 125%; left: 50%; margin-left: -125px; opacity: 0; transition: opacity 0.3s; font-size: 0.85em; font-weight: normal; box-shadow: 0 5px 15px rgba(0,0,0,0.3); line-height: 1.4; }
+        .tooltip-text::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #002B5C transparent transparent transparent; }
+        .tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; }
+        
+        /* Badges & Progress */
+        .badge-transfer { background: #fff3e0; color: #e67e22; padding: 4px 8px; border-radius: 12px; font-weight: bold; font-size: 0.85em; border: 1px solid #ffe0b2; }
+        .progress-bg { width: 100%; background: #e0e0e0; height: 12px; border-radius: 6px; margin-top: 5px; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.6s ease-out; }
         .progress-fill.danger { background: var(--danger); }
 
         /* LOADER & MODAL */
@@ -81,11 +84,9 @@
         .spinner { width: 40px; height: 40px; border: 4px solid #ecf0f1; border-top: 4px solid var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 15px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        /* MODAL */
         .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,43,92,0.6); display:none; justify-content:center; align-items:center; z-index:1000; backdrop-filter: blur(3px); }
         .modal { background: white; padding: 30px; border-radius: 8px; width: 90%; max-width: 450px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); border-top: 6px solid var(--danger); animation: slideDown 0.3s ease; }
         @keyframes slideDown { from {transform: translateY(-30px); opacity:0;} to {transform: translateY(0); opacity:1;} }
-        
         .transfer-box { background: #fff5f5; padding: 15px; border-radius: 5px; border: 1px solid #fed7d7; margin-top: 15px; }
     </style>
 </head>
@@ -94,26 +95,22 @@
 <div id="loginScreen" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#002B5C; z-index:9999; display:flex; flex-direction:column; justify-content:center; align-items:center; color:white;">
     <h1 style="color:#00A3E0; margin-bottom:10px;">Saint Aubin <span style="color:white">Intranet</span></h1>
     <p style="opacity:0.8; margin-bottom:20px;">Ingreso exclusivo personal autorizado</p>
-    <input type="password" id="passInput" placeholder="Contraseña de acceso" style="width:250px; text-align:center; padding:15px; border-radius:30px; border:none;">
+    <input type="password" id="passInput" placeholder="Contraseña" style="width:250px; text-align:center; padding:15px; border-radius:30px; border:none;">
     <button onclick="checkPass()" style="margin-top:20px; background:#00A3E0; color:white; border:none; padding:12px 40px; font-weight:bold; cursor:pointer; border-radius:30px; transition:0.3s;">ENTRAR</button>
     <p id="loginMsg" style="color:#ff6b6b; margin-top:15px; display:none; font-weight:bold;">⚠️ Contraseña Incorrecta</p>
 </div>
 
 <script>
     function checkPass() {
-        const p = document.getElementById('passInput').value;
-        if(p === "SaintAubin2025") {
+        if(document.getElementById('passInput').value === "SaintAubin2025") {
             document.getElementById('loginScreen').style.display = 'none';
             localStorage.setItem('auth', 'true');
-            unlockApp(); 
+            unlockApp();
         } else {
             document.getElementById('loginMsg').style.display = 'block';
         }
     }
-    function logout() {
-        localStorage.removeItem('auth');
-        location.reload();
-    }
+    function logout() { localStorage.removeItem('auth'); location.reload(); }
     window.onload = function() {
         if(localStorage.getItem('auth') === 'true') {
             document.getElementById('loginScreen').style.display = 'none';
@@ -127,36 +124,27 @@
     };
 </script>
 
-<div id="loader">
-    <div class="spinner"></div>
-    <h3 style="color:var(--primary)">Procesando...</h3>
-    <p id="loadMsg" style="color:#7f8c8d">Conectando con base de datos segura...</p>
-</div>
+<div id="loader"><div class="spinner"></div><h3 style="color:var(--primary)">Procesando...</h3><p id="loadMsg" style="color:#7f8c8d">Conectando...</p></div>
 
 <div id="alertModal" class="modal-overlay">
     <div class="modal">
         <h3>⚠️ Saldo Insuficiente</h3>
-        <p style="margin-bottom:5px;">El rubro no tiene fondos en <b id="modalTargetMonth" style="color:var(--primary)"></b>.</p>
-        <p>Faltante: <b id="modalMissing" style="color:var(--danger); font-size:1.2em;"></b></p>
-        
+        <p>No tienes fondos en <b id="modalTargetMonth"></b>.</p>
+        <p>Faltan: <b id="modalMissing" style="color:var(--danger)"></b></p>
         <div class="transfer-box">
             <label style="color:var(--danger)">Autorizar traslado desde:</label>
             <select id="modalSourceMonth" style="background:white;"></select>
-            <small style="color:#c0392b">Se descontará del mes seleccionado.</small>
         </div>
-        
         <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:25px;">
             <button onclick="closeModal()" style="background:#ecf0f1; color:#7f8c8d">Cancelar</button>
-            <button onclick="executeTransfer()" class="accent" style="background:var(--success)">✅ Autorizar y Guardar</button>
+            <button onclick="executeTransfer()" class="accent" style="background:var(--success)">✅ Autorizar</button>
         </div>
     </div>
 </div>
 
 <div class="container" id="mainContainer" style="display:none;">
     <div class="header">
-        <div class="brand">
-            <h1>Saint Aubin <span>International</span></h1>
-        </div>
+        <div class="brand"><h1>Saint Aubin <span>International</span></h1></div>
         <div style="display:flex; gap:10px;">
             <button onclick="syncData(true)" class="primary">🔄 Actualizar</button>
             <button onclick="logout()" style="background:#BDC3C7; color:#555;">🔒 Salir</button>
@@ -165,269 +153,124 @@
 
     <div class="dashboard-grid">
         <div class="card">
-            <h2>Tendencia Mensual (Presupuesto vs Ejecutado)</h2>
-            <div style="height: 250px; position: relative;">
-                <canvas id="budgetChart"></canvas>
-            </div>
+            <h2>Tendencia Mensual</h2>
+            <div style="height: 250px; position: relative;"><canvas id="budgetChart"></canvas></div>
         </div>
-
         <div class="kpi-container">
             <div class="kpi-card"><small>Presupuesto Total</small><div class="kpi-val" id="kTotal">$0</div></div>
-            <div class="kpi-card"><small>Disponible Real</small><div class="kpi-val" id="kAvail" style="color:var(--success)">$0</div></div>
+            <div class="kpi-card"><small>Disponible Real</small><div class="kpi-val" id="kAvail">$0</div></div>
             <div class="kpi-card"><small>% Ejecución</small><div class="kpi-val" id="kPerc" style="color:var(--accent)">0%</div></div>
         </div>
     </div>
 
     <div class="grid">
         <div class="card">
-            <h2>Registrar Nuevo Gasto</h2>
+            <h2>Registrar Gasto</h2>
             <form onsubmit="tryAddExpense(event)">
-                <div style="margin-bottom:5px;">
-                    <label>Solicitante</label>
-                    <select id="uName" required>
-                        <option value="JIAT" selected>JIAT</option>
-                        <option value="MBR">MBR</option>
-                    </select>
-                </div>
-                
-                <label>Rubro Presupuestal</label>
-                <select id="selCode" required><option>Cargando códigos...</option></select>
-                
-                <label>Concepto / Referencia</label>
-                <input type="text" id="ref" placeholder="Ej: Factura 123 - Compra Insumos" required>
-                
+                <div style="margin-bottom:5px;"><label>Solicitante</label><select id="uName" required><option value="JIAT" selected>JIAT</option><option value="MBR">MBR</option></select></div>
+                <label>Rubro</label><select id="selCode" required><option>Cargando...</option></select>
+                <label>Referencia</label><input type="text" id="ref" required>
                 <div style="display:flex; gap:15px;">
-                    <div style="flex:1">
-                        <label>Monto ($)</label>
-                        <input type="text" id="amtDisplay" placeholder="0" required oninput="formatCurrencyInput(this)" style="font-weight:bold; color:var(--primary);">
-                    </div>
-                    <div style="flex:1">
-                        <label>Fecha</label>
-                        <input type="date" id="date" required>
-                    </div>
+                    <div style="flex:1"><label>Monto</label><input type="text" id="amtDisplay" placeholder="0" required oninput="formatCurrencyInput(this)"></div>
+                    <div style="flex:1"><label>Fecha</label><input type="date" id="date" required></div>
                 </div>
-                <button type="submit" id="btnSave" class="accent">Validar Disponibilidad</button>
+                <button type="submit" id="btnSave" class="accent">Validar</button>
             </form>
         </div>
-
         <div class="card">
-            <h2>Últimos Gastos Registrados</h2>
+            <h2>Últimos Gastos</h2>
             <div class="table-wrap" style="max-height:380px">
-                <table id="histTable">
-                    <thead><tr><th>Fecha</th><th>Cód</th><th>Solicitante</th><th>Concepto</th><th>Monto</th><th></th></tr></thead>
-                    <tbody></tbody>
-                </table>
+                <table id="histTable"><thead><tr><th>Fecha</th><th>Cód</th><th>Ref</th><th>Monto</th><th></th></tr></thead><tbody></tbody></table>
             </div>
         </div>
     </div>
 
     <div class="card">
-        <h2>
-            Ejecución Presupuestal Mensual
-            <button onclick="downloadExcel()" class="success">📥 Exportar Excel</button>
-        </h2>
-        <div class="table-wrap">
-            <table id="mainTable">
-                <thead><tr><th>Cód</th><th>Ene</th><th>Feb</th><th>Mar</th><th>Abr</th><th>May</th><th>Jun</th><th>Jul</th><th>Ago</th><th>Sep</th><th>Oct</th><th>Nov</th><th>Dic</th><th>Total</th></tr></thead>
-                <tbody></tbody>
-            </table>
-        </div>
+        <h2>Ejecución Mensual <button onclick="downloadExcel()" class="success" style="float:right;">📥 Excel</button></h2>
+        <div class="table-wrap"><table id="mainTable"><thead><tr><th>Cód</th><th>Ene</th><th>Feb</th><th>Mar</th><th>Abr</th><th>May</th><th>Jun</th><th>Jul</th><th>Ago</th><th>Sep</th><th>Oct</th><th>Nov</th><th>Dic</th><th>Total</th></tr></thead><tbody></tbody></table></div>
     </div>
 
-    <div class="grid-transfer">
+    <div class="grid">
         <div class="card transfer-zone">
             <h2>Módulo de Traslados</h2>
             <form onsubmit="handleTransfer(event)">
-                <label>Rubro a Modificar</label>
-                <select id="selCodeTransfer" required><option>Cargando...</option></select>
-
+                <label>Rubro</label><select id="selCodeTransfer" required><option>Cargando...</option></select>
                 <div style="display:flex; gap:10px;">
-                    <div style="flex:1">
-                        <label>Origen (Saca)</label>
-                        <select id="monthSource" required></select>
-                    </div>
-                    <div style="flex:1">
-                        <label>Destino (Pone)</label>
-                        <select id="monthTarget" required></select>
-                    </div>
+                    <div style="flex:1"><label>Origen</label><select id="monthSource" required></select></div>
+                    <div style="flex:1"><label>Destino</label><select id="monthTarget" required></select></div>
                 </div>
-
-                <label>Valor a Trasladar ($)</label>
-                <input type="text" id="amtTransfer" placeholder="0" required oninput="formatCurrencyInput(this)" style="color:var(--warning); font-weight:bold;">
-
-                <button type="submit" class="warning">Autorizar Traslado</button>
+                <label>Valor ($)</label><input type="text" id="amtTransfer" placeholder="0" required oninput="formatCurrencyInput(this)">
+                <button type="submit" class="warning">Autorizar</button>
             </form>
         </div>
-
         <div class="card transfer-zone">
-            <h2>Bitácora de Auditoría</h2>
-            <div class="table-wrap" style="max-height:300px">
-                <table id="transfersTable">
-                    <thead><tr><th>Fecha</th><th>Código</th><th>Movimiento</th><th>Valor</th><th>Autorizó</th></tr></thead>
-                    <tbody><tr><td colspan="5" style="text-align:center; color:#999;">Cargando...</td></tr></tbody>
-                </table>
-            </div>
+            <h2>Bitácora Traslados</h2>
+            <div class="table-wrap" style="max-height:300px"><table id="transfersTable"><thead><tr><th>Fecha</th><th>Cód</th><th>Movimiento</th><th>Valor</th><th>User</th></tr></thead><tbody></tbody></table></div>
         </div>
     </div>
 
     <div class="card analysis-zone" style="margin-top: 25px;">
         <h2>🔍 Análisis Detallado por Rubro</h2>
-        
         <div style="display:flex; gap:15px; align-items:flex-end; margin-bottom:20px;">
-            <div style="flex:1;">
-                <label>Seleccionar Rubro para Inspeccionar:</label>
-                <select id="detailSelectCode" onchange="renderDetailView()" style="margin-bottom:0; border:2px solid var(--primary);"></select>
-            </div>
+            <div style="flex:1;"><label>Seleccionar Rubro:</label><select id="detailSelectCode" onchange="renderDetailView()" style="margin-bottom:0; border:2px solid var(--primary);"></select></div>
             <button onclick="renderDetailView()" class="primary">Ver Detalle</button>
         </div>
-
         <div id="detailPanel" style="display:none;">
-            
             <div class="kpi-box" style="background:white; border:1px solid #eee; margin-bottom:20px;">
                 <div><small>Presupuesto Anual</small><div class="kpi-val" id="dTotal">$0</div></div>
                 <div><small>Total Gastado</small><div class="kpi-val" id="dSpent" style="color:var(--danger)">$0</div></div>
                 <div><small>Saldo Disponible</small><div class="kpi-val" id="dAvail" style="color:var(--success)">$0</div></div>
             </div>
-
             <div style="margin-bottom:20px;">
-                <label>Porcentaje de Ejecución:</label>
-                <div class="progress-bg">
-                    <div class="progress-fill" id="dProgress"></div>
-                </div>
+                <label>Ejecución:</label>
+                <div class="progress-bg"><div class="progress-fill" id="dProgress"></div></div>
                 <div style="text-align:right; font-weight:bold; color:var(--primary)" id="dPercText">0%</div>
             </div>
-
-            <label>Detalle de Gastos de este Rubro:</label>
+            <label>Detalle de Gastos:</label>
             <div class="table-wrap" style="max-height:250px;">
-                <table id="detailTable">
-                    <thead><tr><th>Fecha</th><th>Ref</th><th>Solicitante</th><th>Monto</th></tr></thead>
-                    <tbody></tbody>
-                </table>
+                <table id="detailTable"><thead><tr><th>Fecha</th><th>Ref</th><th>Solicitante</th><th>Monto</th></tr></thead><tbody></tbody></table>
             </div>
         </div>
     </div>
-
 </div>
 
 <script>
-    // ==================================================
-    // ⚠️ PEGA TU URL DE SHEETDB AQUÍ ⚠️
+    // ⚠️ TU URL DE SHEETDB ⚠️
     const API_URL = "https://sheetdb.io/api/v1/sw4ed7qqbxl4k";
-    // ==================================================
 
     let budget = [], expenses = [], transfers = [];
     let DETECTED_HEADERS = new Array(12).fill(null); 
     let myChart = null;
-    
-    const MONTH_POSSIBILITIES = [
-        ["ENERO","Enero","ENE","JAN","January"], ["FEBRERO","Febrero","FEB","February"], ["MARZO","Marzo","MAR","March"],
-        ["ABRIL","Abril","ABR","APR","April"], ["MAYO","Mayo","MAY","May"], ["JUNIO","Junio","JUN","June"],
-        ["JULIO","Julio","JUL","July"], ["AGOSTO","Agosto","AGO","AUG","August"], ["SEPTIEMBRE","Septiembre","SEP","September"],
-        ["OCTUBRE","Octubre","OCT","October"], ["NOVIEMBRE","Noviembre","NOV","November"], ["DICIEMBRE","Diciembre","DIC","December"]
-    ];
-    const MONTH_LABELS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+    const MONTH_POSSIBILITIES = [["ENERO","Enero","ENE","JAN"],["FEBRERO","Febrero","FEB"],["MARZO","Marzo","MAR"],["ABRIL","Abril","ABR","APR"],["MAYO","Mayo","MAY"],["JUNIO","Junio","JUN"],["JULIO","Julio","JUL"],["AGOSTO","Agosto","AGO","AUG"],["SEPTIEMBRE","Septiembre","SEP"],["OCTUBRE","Octubre","OCT"],["NOVIEMBRE","Noviembre","NOV"],["DICIEMBRE","Diciembre","DIC"]];
+    const MONTH_LABELS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
     let pendingExpense = null;
 
     function unlockApp() {
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('mainContainer').style.display = 'block';
         const u = localStorage.getItem('u');
-        if(u && (u === "JIAT" || u === "MBR")) {
-             document.getElementById('uName').value = u;
-        }
+        if(u && (u==="JIAT"||u==="MBR")) document.getElementById('uName').value = u;
         document.getElementById('date').valueAsDate = new Date();
         populateMonthSelects();
         syncData(true);
     }
 
     function populateMonthSelects() {
-        const s1 = document.getElementById('monthSource');
-        const s2 = document.getElementById('monthTarget');
-        s1.innerHTML = '<option value="">Sel. Mes</option>';
-        s2.innerHTML = '<option value="">Sel. Mes</option>';
+        const s1 = document.getElementById('monthSource'), s2 = document.getElementById('monthTarget');
+        s1.innerHTML = '<option value="">Sel. Mes</option>'; s2.innerHTML = '<option value="">Sel. Mes</option>';
         MONTH_LABELS.forEach((m, i) => {
-            const op1 = document.createElement('option'); op1.value = i; op1.text = m;
-            const op2 = document.createElement('option'); op2.value = i; op2.text = m;
-            s1.appendChild(op1); s2.appendChild(op2);
+            const o1=document.createElement('option'), o2=document.createElement('option');
+            o1.value=i; o1.text=m; o2.value=i; o2.text=m;
+            s1.appendChild(o1); s2.appendChild(o2);
         });
     }
 
-    // --- NUEVA FUNCIÓN: DETALLE POR RUBRO ---
-    function renderDetailView() {
-        const code = document.getElementById('detailSelectCode').value;
-        if(!code) return;
-
-        const panel = document.getElementById('detailPanel');
-        panel.style.display = 'block';
-
-        // 1. Calcular Totales
-        const line = budget.find(b => getSmartValue(b, ["CODIGO","Codigo"]) == code);
-        if(!line) return;
-
-        let totalBudget = 0;
-        // Sumamos los 12 meses del presupuesto actual
-        for(let i=0; i<12; i++) {
-            let rawBud = getSmartValue(line, MONTH_POSSIBILITIES[i]) || "0";
-            if(typeof rawBud === 'string') rawBud = rawBud.replace(/\./g,'').replace(/,/g,'.');
-            totalBudget += (parseFloat(rawBud) || 0);
-        }
-
-        // 2. Filtrar Gastos
-        let totalSpent = 0;
-        const specificExpenses = expenses.filter(x => {
-            const c = getSmartValue(x, ["code","Code","CODIGO"]);
-            return c == code;
-        });
-
-        specificExpenses.forEach(x => {
-            totalSpent += parseFloat(getSmartValue(x, ["amount","Amount","Monto"])) || 0;
-        });
-
-        // 3. Actualizar KPIs del detalle
-        document.getElementById('dTotal').innerText = fmt(totalBudget);
-        document.getElementById('dSpent').innerText = fmt(totalSpent);
-        document.getElementById('dAvail').innerText = fmt(totalBudget - totalSpent);
-
-        // 4. Barra de Progreso
-        let perc = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
-        if(perc > 100) perc = 100;
-        const bar = document.getElementById('dProgress');
-        bar.style.width = perc + "%";
-        bar.className = perc > 90 ? "progress-fill danger" : "progress-fill";
-        document.getElementById('dPercText').innerText = perc.toFixed(1) + "%";
-
-        // 5. Tabla de Detalles
-        const tbody = document.querySelector('#detailTable tbody');
-        tbody.innerHTML = '';
-        
-        if(specificExpenses.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#999">No hay gastos registrados</td></tr>';
-        } else {
-            // Ordenar por fecha
-            specificExpenses.sort((a,b) => new Date(getSmartValue(b, ["date"])) - new Date(getSmartValue(a, ["date"])));
-            
-            specificExpenses.forEach(x => {
-                const r = document.createElement('tr');
-                r.innerHTML = `
-                    <td>${getSmartValue(x, ["date"])}</td>
-                    <td>${getSmartValue(x, ["ref"])}</td>
-                    <td>${getSmartValue(x, ["user"]) || "-"}</td>
-                    <td class="money">${fmt(getSmartValue(x, ["amount"]))}</td>
-                `;
-                tbody.appendChild(r);
-            });
-        }
-    }
-
-    // --- UTILIDADES ---
     function formatCurrencyInput(input) {
         let val = input.value.replace(/\D/g, '');
-        if (val === "") { input.value = ""; return; }
+        if(val==="") { input.value=""; return; }
         input.value = new Intl.NumberFormat('es-CO').format(parseInt(val));
     }
-    function getAmountValue(id) {
-        return parseFloat(document.getElementById(id).value.replace(/\./g, '')) || 0;
-    }
+    function getAmountValue(id) { return parseFloat(document.getElementById(id).value.replace(/\./g, '')) || 0; }
     function getSmartValue(obj, keys) {
         if(!obj) return undefined;
         const objKeys = Object.keys(obj);
@@ -446,157 +289,139 @@
         });
     }
 
-    // --- EXPORTAR A EXCEL ---
-    function downloadExcel() {
-        let csv = "Codigo,Ene,Feb,Mar,Abr,May,Jun,Jul,Ago,Sep,Oct,Nov,Dic,Total\n";
-        budget.forEach(l => {
-            const code = getSmartValue(l, ["CODIGO","Codigo"]);
-            if(!code) return;
-            let row = [code];
-            let total = 0;
-            for(let i=0; i<12; i++) {
-                let rawBud = getSmartValue(l, MONTH_POSSIBILITIES[i]) || "0";
-                if(typeof rawBud === 'string') rawBud = rawBud.replace(/\./g,'').replace(/,/g,'.');
-                let bud = parseFloat(rawBud) || 0;
-                let spent = 0;
-                expenses.forEach(x => {
-                    const c = getSmartValue(x, ["code","Code","CODIGO"]);
-                    const d = getSmartValue(x, ["date","Date","Fecha"]);
-                    const a = parseFloat(getSmartValue(x, ["amount","Amount","Monto","MONTO"])) || 0;
-                    if (c == code && d && (parseInt(d.split('-')[1])-1) == i) spent += a;
-                });
-                row.push(bud - spent); 
-                total += (bud - spent);
-            }
-            row.push(total);
-            csv += row.join(",") + "\n";
-        });
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement("a");
-        const url = URL.createObjectURL(blob);
-        link.setAttribute("href", url);
-        link.setAttribute("download", "Ejecucion_Presupuestal.csv");
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+    function renderDetailView() {
+        const code = document.getElementById('detailSelectCode').value;
+        if(!code) return;
+        document.getElementById('detailPanel').style.display = 'block';
+        
+        const line = budget.find(b => getSmartValue(b, ["CODIGO","Codigo"]) == code);
+        if(!line) return;
+
+        let totalBudget = 0;
+        for(let i=0; i<12; i++) {
+            let raw = getSmartValue(line, MONTH_POSSIBILITIES[i]) || "0";
+            if(typeof raw==='string') raw=raw.replace(/\./g,'').replace(/,/g,'.');
+            totalBudget += (parseFloat(raw)||0);
+        }
+
+        let totalSpent = 0;
+        const specificExpenses = expenses.filter(x => getSmartValue(x, ["code","Code","CODIGO"]) == code);
+        specificExpenses.forEach(x => { totalSpent += parseFloat(getSmartValue(x, ["amount","Amount","Monto"]))||0; });
+
+        document.getElementById('dTotal').innerText = fmt(totalBudget);
+        document.getElementById('dSpent').innerText = fmt(totalSpent);
+        document.getElementById('dAvail').innerText = fmt(totalBudget - totalSpent);
+
+        let perc = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
+        if(perc>100) perc=100;
+        const bar = document.getElementById('dProgress');
+        bar.style.width = perc + "%";
+        bar.className = perc > 90 ? "progress-fill danger" : "progress-fill";
+        document.getElementById('dPercText').innerText = perc.toFixed(1) + "%";
+
+        const tbody = document.querySelector('#detailTable tbody');
+        tbody.innerHTML = '';
+        if(specificExpenses.length === 0) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#999">Sin gastos</td></tr>';
+        else {
+            specificExpenses.sort((a,b) => new Date(getSmartValue(b,["date"])) - new Date(getSmartValue(a,["date"])));
+            specificExpenses.forEach(x => {
+                const r = document.createElement('tr');
+                r.innerHTML = `
+                    <td>${getSmartValue(x,["date","Date","Fecha"])}</td>
+                    <td>${getSmartValue(x,["ref","Ref","Referencia"])}</td>
+                    <td>${getSmartValue(x,["user","User","Usuario"])||"JIAT"}</td>
+                    <td class="money">${fmt(getSmartValue(x,["amount","Amount","Monto"]))}</td>
+                `;
+                tbody.appendChild(r);
+            });
+        }
     }
 
-    // --- CHART ---
     function updateChart() {
-        if (typeof Chart === 'undefined') return;
+        if(typeof Chart==='undefined') return;
         const ctx = document.getElementById('budgetChart').getContext('2d');
-        let dataBudget = new Array(12).fill(0);
-        let dataSpent = new Array(12).fill(0);
-
+        let dataBudget = new Array(12).fill(0), dataSpent = new Array(12).fill(0);
         budget.forEach(b => {
             for(let i=0; i<12; i++) {
-                let rawBud = getSmartValue(b, MONTH_POSSIBILITIES[i]) || "0";
-                if(typeof rawBud === 'string') rawBud = rawBud.replace(/\./g,'').replace(/,/g,'.');
-                dataBudget[i] += (parseFloat(rawBud) || 0);
+                let raw = getSmartValue(b, MONTH_POSSIBILITIES[i])||"0";
+                if(typeof raw==='string') raw=raw.replace(/\./g,'').replace(/,/g,'.');
+                dataBudget[i] += (parseFloat(raw)||0);
             }
         });
-
         expenses.forEach(x => {
-            const d = getSmartValue(x, ["date","Date","Fecha","FECHA"]);
+            const d = getSmartValue(x, ["date","Date","Fecha"]);
             if(d) {
-                const mIdx = parseInt(d.split('-')[1]) - 1;
-                const amt = parseFloat(getSmartValue(x, ["amount","Amount","Monto","MONTO"])) || 0;
-                if(mIdx >= 0 && mIdx < 12) dataSpent[mIdx] += amt;
+                const m = parseInt(d.split('-')[1])-1;
+                const a = parseFloat(getSmartValue(x, ["amount","Amount","Monto"]))||0;
+                if(m>=0 && m<12) dataSpent[m] += a;
             }
         });
-
         if(myChart) myChart.destroy();
         myChart = new Chart(ctx, {
             type: 'bar',
             data: {
                 labels: MONTH_LABELS,
                 datasets: [
-                    { label: 'Presupuesto', data: dataBudget, backgroundColor: '#002B5C', borderRadius: 4 },
-                    { label: 'Ejecutado', data: dataSpent, backgroundColor: '#00A3E0', borderRadius: 4 }
+                    { label: 'Presupuesto', data: dataBudget, backgroundColor: '#002B5C' },
+                    { label: 'Ejecutado', data: dataSpent, backgroundColor: '#00A3E0' }
                 ]
             },
             options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
         });
     }
 
-    // --- SINCRONIZACIÓN ---
     async function syncData(showLoaderUI = false) {
-        if(showLoaderUI) {
-            document.getElementById('loader').style.display = 'flex';
-            document.getElementById('loadMsg').innerText = "Sincronizando...";
-        }
-        
-        let attempts = 0;
-        let success = false;
-        
-        while(attempts < 2 && !success) { 
+        if(showLoaderUI) { document.getElementById('loader').style.display = 'flex'; document.getElementById('loadMsg').innerText = "Sincronizando..."; }
+        let attempts = 0, success = false;
+        while(attempts < 2 && !success) {
             attempts++;
             try {
                 const ts = Date.now();
                 const resB = await fetch(`${API_URL}?sheet=Presupuesto&t=${ts}`);
                 budget = await resB.json();
+                if((!budget || budget.length===0) && attempts===1) throw new Error("Cold Start");
+                if(budget.length>0) detectMonthHeaders(budget[0]);
                 
-                if((!budget || budget.length === 0) && attempts === 1) throw new Error("Cold Start");
-                if(budget.length > 0) detectMonthHeaders(budget[0]);
-
                 const resE = await fetch(`${API_URL}?sheet=Gastos&t=${ts}`);
                 expenses = await resE.json();
-
+                
                 const resT = await fetch(`${API_URL}?sheet=Traslados&t=${ts}`);
                 transfers = await resT.json();
-
-                renderUI();
-                updateChart();
-                success = true;
-            } catch (e) {
-                console.warn("Intento fallido:", e);
-                if(attempts === 1) await new Promise(r => setTimeout(r, 1500)); 
-            }
+                
+                renderUI(); updateChart(); success = true;
+            } catch(e) { if(attempts===1) await new Promise(r=>setTimeout(r,1500)); }
         }
-        
-        if(!success && showLoaderUI) alert("⚠️ No se pudieron cargar los datos.");
         if(showLoaderUI) document.getElementById('loader').style.display = 'none';
     }
 
-    // --- LOGICA DE NEGOCIO ---
     async function tryAddExpense(e) {
         e.preventDefault();
         const btn = document.getElementById('btnSave');
         btn.disabled = true; btn.innerText = "Verificando...";
+        await syncData(false);
         
-        await syncData(false); 
-
         const code = document.getElementById('selCode').value;
         const amount = getAmountValue('amtDisplay');
         const dateStr = document.getElementById('date').value;
         const ref = document.getElementById('ref').value;
-        const monthIdx = parseInt(dateStr.split('-')[1]) - 1;
-
-        const line = budget.find(b => getSmartValue(b, ["CODIGO","Codigo","Code"]) == code);
+        const mIdx = parseInt(dateStr.split('-')[1])-1;
         
-        if (!line) {
-            alert("Código no encontrado");
-            btn.disabled = false; btn.innerText = "Validar y Guardar";
-            return;
-        }
-
-        const header = DETECTED_HEADERS[monthIdx];
-        let rawBud = header ? line[header] : "0";
-        if(typeof rawBud === 'string') rawBud = rawBud.replace(/\./g,'').replace(/,/g,'.');
-        const budgetMonth = parseFloat(rawBud) || 0;
-
-        let spentMonth = 0;
+        const line = budget.find(b => getSmartValue(b, ["CODIGO","Codigo"]) == code);
+        if(!line) { alert("Código no encontrado"); btn.disabled=false; btn.innerText="Validar"; return; }
+        
+        let raw = getSmartValue(line, MONTH_POSSIBILITIES[mIdx])||"0";
+        if(typeof raw==='string') raw=raw.replace(/\./g,'').replace(/,/g,'.');
+        const budMonth = parseFloat(raw)||0;
+        
+        let spent = 0;
         expenses.forEach(x => {
-            const xCode = getSmartValue(x, ["code", "Code", "Codigo", "CODIGO"]);
-            const xDate = getSmartValue(x, ["date", "Date", "Fecha", "FECHA"]);
-            const xAmt = parseFloat(getSmartValue(x, ["amount", "Amount", "Monto", "MONTO"])) || 0;
-            if (xCode == code && xDate && (parseInt(xDate.split('-')[1])-1) == monthIdx) spentMonth += xAmt;
+            if(getSmartValue(x,["code","Code"])==code && (parseInt(getSmartValue(x,["date","Date"]).split('-')[1])-1)==mIdx) 
+                spent += parseFloat(getSmartValue(x,["amount","Amount"]));
         });
 
-        if (amount > (budgetMonth - spentMonth)) {
-            const missing = amount - (budgetMonth - spentMonth);
-            alert(`⛔ SALDO INSUFICIENTE\n\nRubro: ${code}\nMes: ${MONTH_LABELS[monthIdx]}\nDisponible: ${fmt(budgetMonth - spentMonth)}\nFaltan: ${fmt(missing)}\n\nPor favor realiza un traslado en el Módulo de Traslados (abajo).`);
-            btn.disabled = false; btn.innerText = "Validar y Guardar";
+        if(amount > (budMonth - spent)) {
+            alert(`⛔ SALDO INSUFICIENTE\nMes: ${MONTH_LABELS[mIdx]}\nDisponible: ${fmt(budMonth-spent)}`);
+            btn.disabled=false; btn.innerText="Validar";
         } else {
             saveExpense(code, ref, amount, dateStr);
         }
@@ -605,174 +430,132 @@
     async function handleTransfer(e) {
         e.preventDefault();
         const code = document.getElementById('selCodeTransfer').value;
-        const sourceIdx = parseInt(document.getElementById('monthSource').value);
-        const targetIdx = parseInt(document.getElementById('monthTarget').value);
+        const sIdx = parseInt(document.getElementById('monthSource').value);
+        const tIdx = parseInt(document.getElementById('monthTarget').value);
         const amount = getAmountValue('amtTransfer');
         const user = document.getElementById('uName').value;
-
-        if(isNaN(sourceIdx) || isNaN(targetIdx)) return alert("Selecciona meses válidos");
-        if(sourceIdx === targetIdx) return alert("Origen y Destino deben ser diferentes");
-        if(amount <= 0) return alert("Monto inválido");
-
+        
+        if(isNaN(sIdx) || isNaN(tIdx)) return alert("Selecciona meses");
+        if(sIdx===tIdx || amount<=0) return alert("Datos inválidos");
+        
         document.getElementById('loader').style.display = 'flex';
-        document.getElementById('loadMsg').innerText = "Verificando fondos...";
-
         await syncData(false);
-        const line = budget.find(b => getSmartValue(b, ["CODIGO","Codigo","Code"]) == code);
-        const colSource = DETECTED_HEADERS[sourceIdx];
-        const colTarget = DETECTED_HEADERS[targetIdx];
         
-        if(!colSource || !colTarget) { document.getElementById('loader').style.display = 'none'; return alert("Error DB"); }
-
-        let rawBud = line[colSource] || "0";
-        if(typeof rawBud === 'string') rawBud = rawBud.replace(/\./g,'').replace(/,/g,'.');
-        const budgetSource = parseFloat(rawBud) || 0;
+        const line = budget.find(b => getSmartValue(b, ["CODIGO","Codigo"]) == code);
+        const colSrc = DETECTED_HEADERS[sIdx], colTgt = DETECTED_HEADERS[tIdx];
         
-        let spentSource = 0;
+        let raw = line[colSrc]||"0";
+        if(typeof raw==='string') raw=raw.replace(/\./g,'').replace(/,/g,'.');
+        const budSrc = parseFloat(raw)||0;
+        
+        let spentSrc = 0;
         expenses.forEach(x => {
-            const xCode = getSmartValue(x, ["code", "Code", "Codigo", "CODIGO"]);
-            const xDate = getSmartValue(x, ["date", "Date", "Fecha", "FECHA"]);
-            const xAmt = parseFloat(getSmartValue(x, ["amount", "Amount", "Monto", "MONTO"])) || 0;
-            if (xCode == code && xDate && (parseInt(xDate.split('-')[1])-1) == sourceIdx) spentSource += xAmt;
+            if(getSmartValue(x,["code","Code"])==code && (parseInt(getSmartValue(x,["date","Date"]).split('-')[1])-1)==sIdx)
+                spentSrc += parseFloat(getSmartValue(x,["amount","Amount"]));
         });
 
-        if (amount > (budgetSource - spentSource)) {
-            document.getElementById('loader').style.display = 'none';
-            return alert(`⛔ Fondos insuficientes en ${MONTH_LABELS[sourceIdx]}.\nDisponible: ${fmt(budgetSource - spentSource)}`);
+        if(amount > (budSrc - spentSrc)) {
+            document.getElementById('loader').style.display='none';
+            return alert(`⛔ Fondos insuficientes en origen.`);
         }
 
         try {
-            document.getElementById('loadMsg').innerText = "Aplicando traslado...";
+            let vSrc = parseFloat(String(line[colSrc]).replace(/\./g,'').replace(/,/g,'.'))||0;
+            let vTgt = parseFloat(String(line[colTgt]).replace(/\./g,'').replace(/,/g,'.'))||0;
             
-            let valSource = parseFloat(String(line[colSource]).replace(/\./g,'').replace(/,/g,'.')) || 0;
-            let valTarget = parseFloat(String(line[colTarget]).replace(/\./g,'').replace(/,/g,'.')) || 0;
-
-            const updateData = {};
-            updateData[colSource] = valSource - amount;
-            updateData[colTarget] = valTarget + amount;
+            const upd = {}; upd[colSrc] = vSrc - amount; upd[colTgt] = vTgt + amount;
+            const key = Object.keys(line).find(k => k.toUpperCase() === "CODIGO") || "CODIGO";
             
-            const codeKey = Object.keys(line).find(k => k.toUpperCase() === "CODIGO") || "CODIGO";
-
-            await fetch(`${API_URL}/${codeKey}/${encodeURIComponent(code)}?sheet=Presupuesto`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data: updateData })
+            await fetch(`${API_URL}/${key}/${encodeURIComponent(code)}?sheet=Presupuesto`, {
+                method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({data: upd})
             });
-
-            const logData = { "Fecha": new Date().toISOString().split('T')[0], "Codigo": code, "Origen": colSource, "Destino": colTarget, "Valor": amount, "Usuario": user };
+            
+            const log = { "Fecha": new Date().toISOString().split('T')[0], "Codigo": code, "Origen": colSrc, "Destino": colTgt, "Valor": amount, "Usuario": user };
             await fetch(`${API_URL}?sheet=Traslados`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data: [logData] })
+                method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({data: [log]})
             });
             
             alert("✅ Traslado Exitoso");
             document.getElementById('amtTransfer').value = "";
             syncData(true);
-        } catch (e) { alert("Error: " + e.message); document.getElementById('loader').style.display = 'none'; }
+        } catch(e) { alert("Error: "+e.message); document.getElementById('loader').style.display='none'; }
     }
 
     async function saveExpense(code, ref, amount, date) {
         document.getElementById('loader').style.display = 'flex';
-        document.getElementById('loadMsg').innerText = "Guardando gasto...";
-        
         const user = document.getElementById('uName').value;
         localStorage.setItem('u', user);
-
-        const rowData = { "id": Date.now(), "code": code, "CODIGO": code, "ref": ref, "REFERENCIA": ref, "amount": amount, "MONTO": amount, "date": date, "FECHA": date, "user": user, "USUARIO": user };
-
+        const data = { "id": Date.now(), "code": code, "CODIGO": code, "ref": ref, "REFERENCIA": ref, "amount": amount, "MONTO": amount, "date": date, "FECHA": date, "user": user, "USUARIO": user };
+        
         try {
-            const res = await fetch(`${API_URL}?sheet=Gastos`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data: [rowData] })
-            });
-
-            if (!res.ok) throw new Error("Error al guardar");
-
+            const res = await fetch(`${API_URL}?sheet=Gastos`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({data: [data]}) });
+            if(!res.ok) throw new Error("Error Save");
+            
             await syncData(false);
-            document.getElementById('ref').value = "";
-            document.getElementById('amtDisplay').value = "";
-            document.getElementById('loader').style.display = 'none';
-            const btn = document.getElementById('btnSave');
-            btn.disabled = false; btn.innerText = "Validar y Guardar";
-            alert("✅ Gasto registrado correctamente.");
-        } catch(e) {
-            document.getElementById('loader').style.display = 'none';
-            const btn = document.getElementById('btnSave');
-            btn.disabled = false; btn.innerText = "Validar y Guardar";
-            alert("Error: " + e.message);
-        }
+            document.getElementById('ref').value = ""; document.getElementById('amtDisplay').value = "";
+            alert("✅ Guardado");
+        } catch(e) { alert("Error: "+e.message); }
+        document.getElementById('loader').style.display='none';
+        const btn = document.getElementById('btnSave'); btn.disabled=false; btn.innerText="Validar";
     }
 
     async function delExp(id) {
-        if(!confirm("¿Borrar este registro?")) return;
-        document.getElementById('loader').style.display = 'flex';
-        try {
-            await fetch(`${API_URL}/id/${id}?sheet=Gastos`, { method: 'DELETE' });
-            await syncData(false);
-        } catch(e) { alert("Error: " + e.message); }
-        document.getElementById('loader').style.display = 'none';
+        if(!confirm("¿Borrar?")) return;
+        document.getElementById('loader').style.display='flex';
+        try { await fetch(`${API_URL}/id/${id}?sheet=Gastos`, {method:'DELETE'}); await syncData(false); }
+        catch(e) { alert("Error"); }
+        document.getElementById('loader').style.display='none';
     }
 
     function renderUI() {
-        const sel1 = document.getElementById('selCode');
-        const sel2 = document.getElementById('selCodeTransfer');
-        const sel3 = document.getElementById('detailSelectCode'); // Nuevo selector
-        const c1 = sel1.value; const c2 = sel2.value; const c3 = sel3.value;
-        
-        const opts = '<option value="">-- Seleccionar Rubro --</option>';
-        sel1.innerHTML = opts; sel2.innerHTML = opts; sel3.innerHTML = opts;
+        const sel1=document.getElementById('selCode'), sel2=document.getElementById('selCodeTransfer'), sel3=document.getElementById('detailSelectCode');
+        const c1=sel1.value, c2=sel2.value, c3=sel3.value;
+        const opts = '<option value="">-- Seleccionar --</option>';
+        sel1.innerHTML=opts; sel2.innerHTML=opts; sel3.innerHTML=opts;
         
         budget.forEach(b => {
-            const code = getSmartValue(b, ["CODIGO","Codigo"]);
-            const desc = getSmartValue(b, ["DESCRIPCION","Descripcion"]) || "";
-            if(code) {
-                const txt = `${code} - ${desc.substring(0,35)}`;
-                const o1 = document.createElement('option'); o1.value = code; o1.text = txt;
-                const o2 = document.createElement('option'); o2.value = code; o2.text = txt;
-                const o3 = document.createElement('option'); o3.value = code; o3.text = txt;
-                sel1.appendChild(o1); sel2.appendChild(o2); sel3.appendChild(o3);
+            const c = getSmartValue(b, ["CODIGO","Codigo"]);
+            const d = getSmartValue(b, ["DESCRIPCION","Descripcion"])||"";
+            if(c) {
+                const t = `${c} - ${d.substring(0,30)}`;
+                [sel1, sel2, sel3].forEach(s => { const o=document.createElement('option'); o.value=c; o.text=t; s.appendChild(o); });
             }
         });
-        if(c1) sel1.value = c1; if(c2) sel2.value = c2; if(c3) sel3.value = c3;
+        if(c1) sel1.value=c1; if(c2) sel2.value=c2; if(c3) sel3.value=c3;
 
         const expMap = {};
         let tSpent = 0;
         expenses.forEach(x => {
-            const d = getSmartValue(x, ["date","Date","Fecha","FECHA"]);
-            if(!d) return;
-            const p = d.split('-');
-            const m = parseInt(p[1])-1;
-            const c = getSmartValue(x, ["code","Code","Codigo","CODIGO"]);
-            const val = parseFloat(getSmartValue(x, ["amount","Amount","Monto","MONTO"])) || 0;
-            expMap[`${c}-${m}`] = (expMap[`${c}-${m}`]||0) + val;
-            tSpent += val;
+            const d = getSmartValue(x, ["date","Date","Fecha"]); if(!d) return;
+            const m = parseInt(d.split('-')[1])-1;
+            const c = getSmartValue(x, ["code","Code","CODIGO"]);
+            const a = parseFloat(getSmartValue(x, ["amount","Amount","Monto"]))||0;
+            expMap[`${c}-${m}`] = (expMap[`${c}-${m}`]||0) + a;
+            tSpent += a;
         });
 
         const tb = document.querySelector('#mainTable tbody');
         tb.innerHTML = '';
         let tBud = 0;
-
+        
         budget.forEach(l => {
-            const code = getSmartValue(l, ["CODIGO","Codigo"]);
-            if(!code) return;
+            const c = getSmartValue(l, ["CODIGO","Codigo"]); if(!c) return;
             const tr = document.createElement('tr');
-            let h = `<td class="tooltip-container"><b>${code}</b><span class="tooltip-text">${getSmartValue(l, ["DESCRIPCION","Descripcion"])||""}</span></td>`;
+            let h = `<td class="tooltip-container"><b>${c}</b><span class="tooltip-text">${getSmartValue(l,["DESCRIPCION"])||""}</span></td>`;
             let rowSum = 0;
             for(let i=0; i<12; i++) {
-                let rawVal = getSmartValue(l, MONTH_POSSIBILITIES[i]) || "0";
-                if(typeof rawVal === 'string') rawVal = rawVal.replace(/\./g, '').replace(/,/g, '.');
-                let b = Number(rawVal) || 0;
+                let raw = getSmartValue(l, MONTH_POSSIBILITIES[i])||"0";
+                if(typeof raw==='string') raw=raw.replace(/\./g,'').replace(/,/g,'.');
+                let b = parseFloat(raw)||0;
                 rowSum += b;
-                let s = expMap[`${code}-${i}`]||0;
-                let color = s > b ? '#e74c3c' : (s > 0 ? '#27ae60' : '#95a5a6');
-                h += `<td>${b?fmt(b):'-'}<br><span style="color:${color};font-weight:bold;font-size:0.85em">${s?fmt(s):''}</span></td>`;
+                let s = expMap[`${c}-${i}`]||0;
+                let clr = s > b ? '#e74c3c' : (s > 0 ? '#27ae60' : '#95a5a6');
+                h += `<td>${b?fmt(b):'-'}<br><span style="color:${clr};font-weight:bold;font-size:0.85em">${s?fmt(s):''}</span></td>`;
             }
-            let total = Number(getSmartValue(l, ["TOTAL","Total"])||0);
-            if(total===0) total = rowSum;
-            tBud += total;
-            h += `<td><b>${fmt(total)}</b></td>`;
+            let tot = parseFloat(getSmartValue(l, ["TOTAL","Total"])||0);
+            if(tot===0) tot = rowSum;
+            tBud += tot;
+            h += `<td><b>${fmt(tot)}</b></td>`;
             tr.innerHTML = h;
             tb.appendChild(tr);
         });
@@ -785,33 +568,50 @@
         th.innerHTML = '';
         [...expenses].sort((a,b)=>getSmartValue(b,["id"])-getSmartValue(a,["id"])).forEach(x => {
             const r = document.createElement('tr');
-            const d = getSmartValue(x, ["date","Date","Fecha"]);
-            const u = getSmartValue(x, ["user","User","Usuario"]) || "-";
-            const rf = getSmartValue(x, ["ref","Ref","Referencia"]);
-            const cod = getSmartValue(x, ["code","Code","CODIGO"]); 
-            const am = getSmartValue(x, ["amount","Amount","Monto"]);
+            const d = getSmartValue(x, ["date","Date"]);
+            const u = getSmartValue(x, ["user","User","Usuario"])||"JIAT";
+            const rf = getSmartValue(x, ["ref","Ref"]);
+            const cd = getSmartValue(x, ["code","Code"]);
+            const am = getSmartValue(x, ["amount","Amount"]);
             const id = getSmartValue(x, ["id","ID"]);
-            r.innerHTML = `<td>${d}</td><td>${cod}</td><td>${u}</td><td>${rf}</td><td style="font-weight:bold">${fmt(am)}</td><td style="text-align:right"><button class="danger" onclick="delExp(${id})">×</button></td>`;
+            r.innerHTML = `<td>${d}</td><td>${cd}</td><td>${u}</td><td>${rf}</td><td class="money">${fmt(am)}</td><td style="text-align:right"><button class="danger" onclick="delExp(${id})">×</button></td>`;
             th.appendChild(r);
         });
 
         const tt = document.querySelector('#transfersTable tbody');
         tt.innerHTML = '';
-        if(!transfers || transfers.length === 0) {
-            tt.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">Sin movimientos</td></tr>';
-        } else {
-            [...transfers].reverse().forEach(t => {
+        if(!transfers || transfers.length === 0) tt.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">Sin movimientos</td></tr>';
+        else {
+            [...transfers].reverse().slice(0,10).forEach(t => {
                 const r = document.createElement('tr');
-                const date = getSmartValue(t, ["Fecha","FECHA"]);
-                const cod = getSmartValue(t, ["Codigo","CODIGO"]);
-                const ori = getSmartValue(t, ["Origen","ORIGEN"]);
-                const dest = getSmartValue(t, ["Destino","DESTINO"]);
-                const val = getSmartValue(t, ["Valor","VALOR"]);
-                const usr = getSmartValue(t, ["Usuario","USUARIO"]) || "-";
-                r.innerHTML = `<td>${date}</td><td>${cod}</td><td><span class="badge-transfer">${ori} ➔ ${dest}</span></td><td style="font-weight:bold">${fmt(val)}</td><td>${usr}</td>`;
+                r.innerHTML = `<td>${getSmartValue(t, ["Fecha"])}</td><td>${getSmartValue(t, ["Codigo"])}</td><td><span class="badge-transfer">${getSmartValue(t, ["Origen"])} ➔ ${getSmartValue(t, ["Destino"])}</span></td><td style="font-weight:bold">${fmt(getSmartValue(t, ["Valor"]))}</td><td>${getSmartValue(t, ["Usuario"])}</td>`;
                 tt.appendChild(r);
             });
         }
+    }
+
+    function downloadExcel() {
+        let csv = "Codigo,Ene,Feb,Mar,Abr,May,Jun,Jul,Ago,Sep,Oct,Nov,Dic,Total\n";
+        budget.forEach(l => {
+            const c = getSmartValue(l, ["CODIGO","Codigo"]); if(!c) return;
+            let r = [c], tot=0;
+            for(let i=0; i<12; i++) {
+                let raw = getSmartValue(l, MONTH_POSSIBILITIES[i])||"0";
+                let b = parseFloat(typeof raw==='string'?raw.replace(/\./g,'').replace(/,/g,'.'):raw)||0;
+                let s = 0;
+                expenses.forEach(x => {
+                    if(getSmartValue(x,["code","Code"])==c && (parseInt(getSmartValue(x,["date","Date"]).split('-')[1])-1)==i)
+                        s += parseFloat(getSmartValue(x,["amount","Amount"]));
+                });
+                r.push(b-s); tot += (b-s);
+            }
+            r.push(tot); csv += r.join(",")+"\n";
+        });
+        const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "Ejecucion_Presupuestal.csv";
+        link.click();
     }
 
     function fmt(n) { return new Intl.NumberFormat('es-CO', {maximumFractionDigits:0}).format(n); }
