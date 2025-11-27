@@ -6,7 +6,7 @@
     <title>Control Presupuestal G&C</title>
     <style>
         /* ESTILOS G&C */
-        :root { --primary: #2F4F4F; --accent: #48C9B0; --bg: #EBF5F3; --white: #fff; --danger: #c0392b; --success: #27ae60; }
+        :root { --primary: #2F4F4F; --accent: #48C9B0; --bg: #EBF5F3; --white: #fff; --danger: #c0392b; --success: #27ae60; --warning: #f39c12; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); padding: 20px; color: #333; font-size:14px; }
         .container { max-width: 1200px; margin: 0 auto; }
         
@@ -31,6 +31,10 @@
         td { padding: 8px; border-bottom: 1px solid #eee; }
         .table-wrap { overflow-x: auto; }
         
+        /* BADGES PARA TRASLADOS */
+        .badge { padding: 3px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold; display: inline-block; }
+        .badge-move { background: #e3f2fd; color: #1565c0; border: 1px solid #bbdefb; }
+
         /* LOADER & MODAL */
         #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 999; display: none; }
         
@@ -42,12 +46,12 @@
 </head>
 <body>
 
-<div id="loader"><h2>🔄 Cargando...</h2><p id="loadMsg">Iniciando sistema...</p></div>
+<div id="loader"><h2>🔄 Cargando...</h2><p id="loadMsg">Actualizando información...</p></div>
 
 <div id="alertModal" class="modal-overlay">
     <div class="modal">
         <h3>⚠️ Saldo Insuficiente</h3>
-        <p>No tienes fondos en <b id="modalTargetMonth"></b>.</p>
+        <p>No tienes fondos suficientes en <b id="modalTargetMonth"></b>.</p>
         <p>Faltan: <b id="modalMissing" style="color:var(--danger)"></b></p>
         
         <div class="transfer-box">
@@ -90,10 +94,20 @@
         </div>
 
         <div class="card">
-            <h2>Últimos Movimientos (Gastos)</h2>
+            <h2>Últimos Gastos</h2>
             <div class="table-wrap" style="max-height:300px">
                 <table id="histTable"><thead><tr><th>Fecha</th><th>Ref</th><th>Monto</th><th></th></tr></thead><tbody></tbody></table>
             </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>🔄 Bitácora de Traslados</h2>
+        <div class="table-wrap" style="max-height:200px">
+            <table id="transfersTable">
+                <thead><tr><th>Fecha</th><th>Código</th><th>Movimiento</th><th>Valor</th><th>Usuario</th></tr></thead>
+                <tbody><tr><td colspan="5" style="text-align:center; color:#999;">Cargando...</td></tr></tbody>
+            </table>
         </div>
     </div>
 
@@ -114,7 +128,7 @@
     const API_URL = "https://sheetdb.io/api/v1/sw4ed7qqbxl4k";
     // ==================================================
 
-    let budget = [], expenses = [];
+    let budget = [], expenses = [], transfers = [];
     let DETECTED_HEADERS = new Array(12).fill(null); 
     
     const MONTH_POSSIBILITIES = [
@@ -164,33 +178,26 @@
     async function syncData(showLoaderUI = false) {
         if(showLoaderUI) {
             document.getElementById('loader').style.display = 'flex';
-            document.getElementById('loadMsg').innerText = "Conectando...";
+            document.getElementById('loadMsg').innerText = "Verificando datos...";
         }
         
         try {
-            const ts = Date.now() + Math.random();
+            const ts = Date.now();
+            // 1. Presupuesto
             const resB = await fetch(`${API_URL}?sheet=Presupuesto&t=${ts}`);
             budget = await resB.json();
-            
-            // Reintento si está vacío
-            if(budget.length === 0) {
-                if(showLoaderUI) {
-                    document.getElementById('loadMsg').innerText = "Despertando base de datos...";
-                    setTimeout(() => syncData(showLoaderUI), 1500);
-                    return;
-                }
-            }
-
             if(budget.length > 0) detectMonthHeaders(budget[0]);
 
+            // 2. Gastos
             const resE = await fetch(`${API_URL}?sheet=Gastos&t=${ts}`);
             expenses = await resE.json();
 
+            // 3. Traslados (NUEVO)
+            const resT = await fetch(`${API_URL}?sheet=Traslados&t=${ts}`);
+            transfers = await resT.json();
+
             renderUI();
-        } catch (e) { 
-            console.error(e); 
-            if(showLoaderUI) alert("Error conectando: " + e.message); 
-        }
+        } catch (e) { console.error(e); if(showLoaderUI) alert("Error conectando: " + e.message); }
         
         if(showLoaderUI) document.getElementById('loader').style.display = 'none';
     }
@@ -198,10 +205,10 @@
     // --- VALIDACIÓN ---
     async function tryAddExpense(e) {
         e.preventDefault();
-        const btn = e.target.querySelector('button[type="submit"]');
-        btn.disabled = true; btn.innerText = "Verificando...";
+        const btn = document.getElementById('btnSave');
+        btn.disabled = true; btn.innerText = "Validar...";
         
-        await syncData(false); // Recarga silenciosa
+        await syncData(false);
 
         const code = document.getElementById('selCode').value;
         const amount = getAmountValue();
@@ -228,7 +235,7 @@
             const xDate = getSmartValue(x, ["date", "Date", "Fecha", "FECHA"]);
             const xAmt = parseFloat(getSmartValue(x, ["amount", "Amount", "Monto", "MONTO"])) || 0;
 
-            if (xCode == code && (parseInt(xDate.split('-')[1])-1) == monthIdx) {
+            if (xCode == code && xDate && (parseInt(xDate.split('-')[1])-1) == monthIdx) {
                 spentMonth += xAmt;
             }
         });
@@ -259,14 +266,12 @@
             const bud = parseFloat(rawBud) || 0;
             
             let spent = 0;
-            const codeVal = getSmartValue(line, ["CODIGO","Codigo"]);
-            
+            const codeVal = getSmartValue(line, ["CODIGO"]);
             expenses.forEach(x => {
                 const xCode = getSmartValue(x, ["code", "Code", "Codigo", "CODIGO"]);
                 const xDate = getSmartValue(x, ["date", "Date", "Fecha", "FECHA"]);
                 const xAmt = parseFloat(getSmartValue(x, ["amount", "Amount", "Monto", "MONTO"])) || 0;
-
-                if (xCode == codeVal && (parseInt(xDate.split('-')[1])-1) == idx) {
+                if (xCode == codeVal && xDate && (parseInt(xDate.split('-')[1])-1) == idx) {
                     spent += xAmt;
                 }
             });
@@ -285,16 +290,17 @@
 
     function closeModal() {
         document.getElementById('alertModal').style.display = 'none';
-        pendingExpense = null;
     }
 
     // --- TRASLADO ---
     async function executeTransfer() {
         if(!pendingExpense) return;
+        
+        const transferData = { ...pendingExpense };
         const sourceIdx = document.getElementById('modalSourceMonth').value;
+        
         if(isNaN(sourceIdx)) return alert("Selecciona un mes");
 
-        const transferData = { ...pendingExpense };
         closeModal();
         pendingExpense = null;
 
@@ -305,7 +311,7 @@
         document.getElementById('loadMsg').innerText = "Registrando traslado...";
 
         try {
-            const line = budget.find(b => getSmartValue(b, ["CODIGO","Codigo"]) == transferData.code);
+            const line = budget.find(b => getSmartValue(b, ["CODIGO"]) == transferData.code);
             let valSource = parseFloat(String(line[colSource]).replace(/\./g,'').replace(/,/g,'.')) || 0;
             let valTarget = parseFloat(String(line[colTarget]).replace(/\./g,'').replace(/,/g,'.')) || 0;
 
@@ -314,16 +320,18 @@
             updateData[colTarget] = valTarget + transferData.missing;
             const codeKey = Object.keys(line).find(k => k.toUpperCase() === "CODIGO") || "CODIGO";
 
+            // A. Actualizar Presupuesto
             await fetch(`${API_URL}/${codeKey}/${encodeURIComponent(transferData.code)}?sheet=Presupuesto`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ data: updateData })
             });
 
+            // B. Registrar Traslado
             const logData = {
                 "Fecha": new Date().toISOString().split('T')[0],
                 "Codigo": transferData.code,
-                "Origen": colSource,
+                "Origen": colSource, // Nombre columna (ej: ENERO)
                 "Destino": colTarget,
                 "Valor": transferData.missing,
                 "Usuario": transferData.user
@@ -331,13 +339,14 @@
             await fetch(`${API_URL}?sheet=Traslados`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data: [logData] })
+                body: JSON.stringify({ data: [logData] }) // Array para POST
             });
 
+            // C. Guardar Gasto
             document.getElementById('loadMsg').innerText = "Guardando gasto final...";
             await saveExpense(transferData.code, transferData.ref, transferData.amount, transferData.date, false, transferData.user);
             
-            alert("✅ Operación Exitosa.");
+            alert("✅ Traslado completado.");
             syncData(true);
 
         } catch (e) {
@@ -348,10 +357,7 @@
 
     // --- GUARDAR GASTO ---
     async function saveExpense(code, ref, amount, date, hideLoader=true, explicitUser=null) {
-        if(hideLoader) {
-            document.getElementById('loader').style.display = 'flex';
-            document.getElementById('loadMsg').innerText = "Enviando a la nube...";
-        }
+        if(hideLoader) document.getElementById('loader').style.display = 'flex';
         
         const user = explicitUser || document.getElementById('uName').value || "WebUser";
         localStorage.setItem('u', user);
@@ -375,21 +381,20 @@
             if (!res.ok) throw new Error("Error al guardar");
 
             if(hideLoader) {
-                await syncData(true);
+                await syncData(false); // Recarga silenciosa
                 document.getElementById('ref').value = "";
                 document.getElementById('amtDisplay').value = "";
                 
+                document.getElementById('loader').style.display = 'none';
                 const btn = document.getElementById('btnSave');
                 btn.disabled = false; btn.innerText = "Validar y Guardar";
-                
-                alert("✅ Guardado Correctamente");
+                alert("✅ Guardado");
             }
         } catch(e) {
             document.getElementById('loader').style.display = 'none';
             const btn = document.getElementById('btnSave');
             btn.disabled = false; btn.innerText = "Validar y Guardar";
-            if(hideLoader) alert("Error: " + e.message);
-            else throw e;
+            if(hideLoader) alert("Error: " + e.message); else throw e;
         }
     }
 
@@ -398,7 +403,7 @@
         document.getElementById('loader').style.display = 'flex';
         try {
             await fetch(`${API_URL}/id/${id}?sheet=Gastos`, { method: 'DELETE' });
-            await syncData(true);
+            await syncData(false);
         } catch(e) { alert("Error: " + e.message); }
         document.getElementById('loader').style.display = 'none';
     }
@@ -428,7 +433,6 @@
             const m = parseInt(p[1])-1;
             const c = getSmartValue(x, ["code","Code","Codigo","CODIGO"]);
             const a = parseFloat(getSmartValue(x, ["amount","Amount","Monto","MONTO"])) || 0;
-            
             const k = `${c}-${m}`;
             expMap[k] = (expMap[k]||0) + a;
             tSpent += a;
@@ -469,20 +473,44 @@
         document.getElementById('kAvail').innerText = fmt(tBud-tSpent);
         document.getElementById('kPerc').innerText = tBud>0 ? ((tSpent/tBud)*100).toFixed(1)+"%" : "0%";
 
+        // TABLA GASTOS
         const th = document.querySelector('#histTable tbody');
         th.innerHTML = '';
-        // Ordenar por ID descendente
         [...expenses].sort((a,b)=>getSmartValue(b,["id"])-getSmartValue(a,["id"])).slice(0,10).forEach(x => {
             const r = document.createElement('tr');
             const d = getSmartValue(x, ["date","Date","Fecha","FECHA"]);
             const rf = getSmartValue(x, ["ref","Ref","Referencia"]);
             const am = getSmartValue(x, ["amount","Amount","Monto"]);
             const id = getSmartValue(x, ["id","ID"]);
-            
             r.innerHTML = `<td>${d}</td><td>${rf}</td><td class="money">${fmt(am)}</td><td><button class="danger" onclick="delExp(${id})">x</button></td>`;
             th.appendChild(r);
         });
+
+        // TABLA TRASLADOS (NUEVA)
+        const tt = document.querySelector('#transfersTable tbody');
+        tt.innerHTML = '';
+        if(transfers.length === 0) {
+            tt.innerHTML = '<tr><td colspan="5" style="text-align:center">Sin traslados recientes</td></tr>';
+        } else {
+            [...transfers].reverse().slice(0,5).forEach(t => {
+                const r = document.createElement('tr');
+                // Buscamos las llaves flexibles
+                const date = getSmartValue(t, ["Fecha","FECHA","Date"]);
+                const cod = getSmartValue(t, ["Codigo","CODIGO"]);
+                const ori = getSmartValue(t, ["Origen","ORIGEN"]);
+                const dest = getSmartValue(t, ["Destino","DESTINO"]);
+                const val = getSmartValue(t, ["Valor","VALOR"]);
+                const usr = getSmartValue(t, ["Usuario","USUARIO"]) || "-";
+                
+                r.innerHTML = `<td>${date}</td><td>${cod}</td>
+                               <td><span class="badge badge-move">${ori} ➔ ${dest}</span></td>
+                               <td class="money">${fmt(val)}</td><td>${usr}</td>`;
+                tt.appendChild(r);
+            });
+        }
     }
 
     function fmt(n) { return new Intl.NumberFormat('es-CO', {maximumFractionDigits:0}).format(n); }
 </script>
+</body>
+</html>
