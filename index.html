@@ -21,7 +21,7 @@
         button { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; color: white; background: var(--primary); transition: 0.2s; }
         button.accent { background: var(--accent); color: #004d40; width: 100%; }
         button.danger { background: var(--danger); padding: 5px 10px; font-size: 0.8em; }
-        button:disabled { background: #ccc; cursor: not-allowed; }
+        button:disabled { background: #ccc; cursor: wait; }
         
         .kpi-box { display: flex; justify-content: space-between; text-align: center; }
         .kpi-val { font-size: 1.5rem; font-weight: bold; color: var(--primary); }
@@ -42,18 +42,18 @@
 </head>
 <body>
 
-<div id="loader"><h2>🔄 Conectando con la Nube...</h2><p id="loadMsg">Por favor espera, esto asegura que los datos sean reales.</p></div>
+<div id="loader"><h2>🔄 Cargando...</h2><p id="loadMsg">Iniciando sistema...</p></div>
 
 <div id="alertModal" class="modal-overlay">
     <div class="modal">
         <h3>⚠️ Saldo Insuficiente</h3>
-        <p>No tienes fondos suficientes en <b id="modalTargetMonth"></b>.</p>
+        <p>No tienes fondos en <b id="modalTargetMonth"></b>.</p>
         <p>Faltan: <b id="modalMissing" style="color:var(--danger)"></b></p>
         
         <div class="transfer-box">
             <label>Trasladar fondos desde:</label>
             <select id="modalSourceMonth"></select>
-            <small style="color:#666">Solo aparecen meses con saldo real disponible.</small>
+            <small style="color:#666">Meses con saldo disponible.</small>
         </div>
         
         <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
@@ -131,7 +131,7 @@
         if(u) document.getElementById('uName').value = u;
         document.getElementById('date').valueAsDate = new Date();
         
-        // Iniciamos carga (false = sin bloquear pantalla completa al inicio, opcional)
+        // INICIO ROBUSTO: Intentar conectar varias veces si falla
         syncData(true); 
     });
 
@@ -162,63 +162,59 @@
         });
     }
 
-    // --- SINCRONIZACIÓN CON AUTO-REINTENTO ---
-    async function syncData(showLoaderUI = false, isRetry = false) {
-        if(showLoaderUI) {
-            document.getElementById('loader').style.display = 'flex';
-            // Si es reintento, mostramos mensaje diferente
-            document.getElementById('loadMsg').innerText = isRetry ? "Reintentando conexión..." : "Conectando con la Nube...";
-        }
+    // --- SINCRONIZACIÓN "AUTO-DESPERTAR" ---
+    async function syncData(showLoaderUI = false) {
+        if(showLoaderUI) document.getElementById('loader').style.display = 'flex';
         
-        try {
-            // Cache-busting potente: timestamp + random
-            const ts = new Date().getTime() + Math.random();
+        let attempts = 0;
+        let success = false;
+        const maxAttempts = 3; // Intentará 3 veces antes de rendirse
+
+        while(attempts < maxAttempts && !success) {
+            attempts++;
+            if(showLoaderUI) document.getElementById('loadMsg').innerText = `Conectando (Intento ${attempts}/${maxAttempts})...`;
             
-            // 1. LEER DATOS
-            const resB = await fetch(`${API_URL}?sheet=Presupuesto&t=${ts}`);
-            budget = await resB.json();
-            
-            // --- LÓGICA DE AUTO-REINTENTO ---
-            // Si el presupuesto llega vacío y es la primera vez, asumimos "Arranque en Frío"
-            // y reintentamos automáticamente en 1.5 segundos.
-            if (budget.length === 0 && !isRetry) {
-                console.warn("Datos vacíos detectados (Cold Start). Reintentando automáticamente...");
-                if(showLoaderUI) document.getElementById('loadMsg').innerText = "Despertando base de datos...";
+            try {
+                // Timestamp para evitar caché viejo
+                const ts = Date.now();
+                const headers = { 'Cache-Control': 'no-cache' };
+
+                const resB = await fetch(`${API_URL}?sheet=Presupuesto&t=${ts}`, { headers });
+                const jsonB = await resB.json();
                 
-                setTimeout(() => syncData(showLoaderUI, true), 1500);
-                return; // Salimos para esperar el reintento
-            }
+                // Si recibimos array vacio o error, lanzamos excepcion para reintentar
+                if(!Array.isArray(jsonB) || jsonB.length === 0) throw new Error("Datos vacíos");
 
-            if(budget.length > 0) detectMonthHeaders(budget[0]);
+                budget = jsonB;
+                detectMonthHeaders(budget[0]);
 
-            const resE = await fetch(`${API_URL}?sheet=Gastos&t=${ts}`);
-            expenses = await resE.json();
+                const resE = await fetch(`${API_URL}?sheet=Gastos&t=${ts}`, { headers });
+                expenses = await resE.json();
 
-            renderUI();
-        } catch (e) { 
-            console.error(e); 
-            // Si falló por error de red en el primer intento, también reintentamos una vez
-            if (!isRetry) {
-                setTimeout(() => syncData(showLoaderUI, true), 2000);
-            } else {
-                alert("Error conectando: " + e.message); 
+                success = true; // ¡Éxito! Salimos del bucle
+                renderUI();
+
+            } catch (e) {
+                console.warn(`Intento ${attempts} fallido: ${e.message}`);
+                // Esperar 1.5 segundos antes de reintentar
+                if(attempts < maxAttempts) await new Promise(r => setTimeout(r, 1500));
             }
         }
+
+        if(!success && showLoaderUI) {
+            alert("⚠️ El servidor está dormido o lento. Por favor presiona 'Actualizar' nuevamente.");
+        }
         
-        // Ocultamos loader solo si terminamos (y no estamos esperando reintento)
         if(showLoaderUI) document.getElementById('loader').style.display = 'none';
     }
 
     // --- VALIDACIÓN ---
     async function tryAddExpense(e) {
         e.preventDefault();
+        const btn = document.getElementById('btnSave');
+        btn.disabled = true; btn.innerText = "Verificando...";
         
-        // Bloqueo botón y recarga de seguridad
-        const btn = e.target.querySelector('button[type="submit"]');
-        btn.disabled = true; 
-        btn.innerText = "Verificando...";
-        
-        await syncData(true); // Recarga obligatoria para tener saldo real
+        await syncData(true); // Recarga obligatoria
 
         const code = document.getElementById('selCode').value;
         const amount = getAmountValue();
@@ -247,13 +243,12 @@
         });
 
         if (amount > (budgetMonth - spentMonth)) {
+            const missing = amount - (budgetMonth - spentMonth);
             pendingExpense = { 
-                code, amount, date: dateStr, ref, monthIdx, 
-                missing: amount - (budgetMonth - spentMonth),
-                user: document.getElementById('uName').value
+                code, amount, date: dateStr, ref, monthIdx, missing,
+                user: localStorage.getItem('u') || "WebUser"
             };
             openModal(line, monthIdx, pendingExpense.missing);
-            
             btn.disabled = false; btn.innerText = "Validar y Guardar";
         } else {
             saveExpense(code, ref, amount, dateStr);
@@ -294,14 +289,12 @@
 
     function closeModal() {
         document.getElementById('alertModal').style.display = 'none';
-        pendingExpense = null;
     }
 
     // --- TRASLADO ---
     async function executeTransfer() {
         if(!pendingExpense) return;
         
-        // Copia de seguridad
         const transferData = { ...pendingExpense };
         const sourceIdx = document.getElementById('modalSourceMonth').value;
         
@@ -383,24 +376,21 @@
 
             if (!res.ok) throw new Error("Error al guardar");
 
-            // No actualizamos localmente, forzamos recarga de nube para ser pesimistas
             if(hideLoader) {
                 await syncData(false);
                 document.getElementById('ref').value = "";
                 document.getElementById('amtDisplay').value = "";
-                
                 document.getElementById('loader').style.display = 'none';
                 
-                const btn = document.querySelector('button[type="submit"]'); // Restaurar botón
-                if(btn) { btn.disabled = false; btn.innerText = "Validar y Guardar"; }
+                const btn = document.getElementById('btnSave');
+                btn.disabled = false; btn.innerText = "Validar y Guardar";
 
                 alert("✅ Guardado Correctamente");
             }
         } catch(e) {
             document.getElementById('loader').style.display = 'none';
-            const btn = document.querySelector('button[type="submit"]');
-            if(btn) { btn.disabled = false; btn.innerText = "Validar y Guardar"; }
-            
+            const btn = document.getElementById('btnSave');
+            btn.disabled = false; btn.innerText = "Validar y Guardar";
             if(hideLoader) alert("Error: " + e.message);
             else throw e;
         }
@@ -411,7 +401,6 @@
         document.getElementById('loader').style.display = 'flex';
         try {
             await fetch(`${API_URL}/id/${id}?sheet=Gastos`, { method: 'DELETE' });
-            // Recarga forzada tras borrar
             await syncData(false);
         } catch(e) { alert("Error: " + e.message); }
         document.getElementById('loader').style.display = 'none';
@@ -490,6 +479,3 @@
 
     function fmt(n) { return new Intl.NumberFormat('es-CO', {maximumFractionDigits:0}).format(n); }
 </script>
-</body>
-</html>
-
