@@ -130,7 +130,9 @@
         const u = localStorage.getItem('u');
         if(u) document.getElementById('uName').value = u;
         document.getElementById('date').valueAsDate = new Date();
-        syncData(true); // Carga inicial forzada
+        
+        // Iniciamos carga (false = sin bloquear pantalla completa al inicio, opcional)
+        syncData(true); 
     });
 
     // --- UTILIDADES ---
@@ -160,42 +162,63 @@
         });
     }
 
-    // --- SINCRONIZACIÓN ESTRICTA ---
-    async function syncData(showLoaderUI = false) {
+    // --- SINCRONIZACIÓN CON AUTO-REINTENTO ---
+    async function syncData(showLoaderUI = false, isRetry = false) {
         if(showLoaderUI) {
             document.getElementById('loader').style.display = 'flex';
-            document.getElementById('loadMsg').innerText = "Verificando datos en la nube...";
+            // Si es reintento, mostramos mensaje diferente
+            document.getElementById('loadMsg').innerText = isRetry ? "Reintentando conexión..." : "Conectando con la Nube...";
         }
         
         try {
-            // Cache-busting: Agregamos timestamp para evitar que el navegador use datos viejos
-            const ts = new Date().getTime();
+            // Cache-busting potente: timestamp + random
+            const ts = new Date().getTime() + Math.random();
             
+            // 1. LEER DATOS
             const resB = await fetch(`${API_URL}?sheet=Presupuesto&t=${ts}`);
             budget = await resB.json();
+            
+            // --- LÓGICA DE AUTO-REINTENTO ---
+            // Si el presupuesto llega vacío y es la primera vez, asumimos "Arranque en Frío"
+            // y reintentamos automáticamente en 1.5 segundos.
+            if (budget.length === 0 && !isRetry) {
+                console.warn("Datos vacíos detectados (Cold Start). Reintentando automáticamente...");
+                if(showLoaderUI) document.getElementById('loadMsg').innerText = "Despertando base de datos...";
+                
+                setTimeout(() => syncData(showLoaderUI, true), 1500);
+                return; // Salimos para esperar el reintento
+            }
+
             if(budget.length > 0) detectMonthHeaders(budget[0]);
 
             const resE = await fetch(`${API_URL}?sheet=Gastos&t=${ts}`);
             expenses = await resE.json();
 
             renderUI();
-        } catch (e) { console.error(e); alert("Error conectando: " + e.message); }
+        } catch (e) { 
+            console.error(e); 
+            // Si falló por error de red en el primer intento, también reintentamos una vez
+            if (!isRetry) {
+                setTimeout(() => syncData(showLoaderUI, true), 2000);
+            } else {
+                alert("Error conectando: " + e.message); 
+            }
+        }
         
+        // Ocultamos loader solo si terminamos (y no estamos esperando reintento)
         if(showLoaderUI) document.getElementById('loader').style.display = 'none';
     }
 
-    // --- VALIDACIÓN (AHORA RECARGA ANTES DE VALIDAR) ---
+    // --- VALIDACIÓN ---
     async function tryAddExpense(e) {
         e.preventDefault();
         
-        // Bloqueo de seguridad UI
-        const btn = document.getElementById('btnSave');
-        btn.disabled = true;
-        btn.innerText = "Verificando en Nube...";
+        // Bloqueo botón y recarga de seguridad
+        const btn = e.target.querySelector('button[type="submit"]');
+        btn.disabled = true; 
+        btn.innerText = "Verificando...";
         
-        // PASO CRÍTICO: Volvemos a descargar los datos ANTES de validar
-        // Esto asegura que si alguien más gastó o si hubo error, lo sepamos
-        await syncData(true); 
+        await syncData(true); // Recarga obligatoria para tener saldo real
 
         const code = document.getElementById('selCode').value;
         const amount = getAmountValue();
@@ -223,23 +246,17 @@
             }
         });
 
-        const available = budgetMonth - spentMonth;
-
-        if (amount > available) {
-            const missing = amount - available;
+        if (amount > (budgetMonth - spentMonth)) {
             pendingExpense = { 
                 code, amount, date: dateStr, ref, monthIdx, 
-                missing,
-                user: localStorage.getItem('u') || "WebUser"
+                missing: amount - (budgetMonth - spentMonth),
+                user: document.getElementById('uName').value
             };
             openModal(line, monthIdx, pendingExpense.missing);
             
-            // Restaurar botón para reintento futuro
-            btn.disabled = false; 
-            btn.innerText = "Validar y Guardar";
+            btn.disabled = false; btn.innerText = "Validar y Guardar";
         } else {
-            await saveExpense(code, ref, amount, dateStr);
-            // El botón se restaura dentro de saveExpense
+            saveExpense(code, ref, amount, dateStr);
         }
     }
 
@@ -251,11 +268,10 @@
         
         DETECTED_HEADERS.forEach((header, idx) => {
             if (idx === targetIdx || !header) return;
-            
             let rawBud = line[header] || "0";
             if(typeof rawBud === 'string') rawBud = rawBud.replace(/\./g,'').replace(/,/g,'.');
             const bud = parseFloat(rawBud) || 0;
-
+            
             let spent = 0;
             const codeVal = getSmartValue(line, ["CODIGO"]);
             expenses.forEach(x => {
@@ -278,13 +294,15 @@
 
     function closeModal() {
         document.getElementById('alertModal').style.display = 'none';
+        pendingExpense = null;
     }
 
     // --- TRASLADO ---
     async function executeTransfer() {
         if(!pendingExpense) return;
         
-        const dataToSave = { ...pendingExpense };
+        // Copia de seguridad
+        const transferData = { ...pendingExpense };
         const sourceIdx = document.getElementById('modalSourceMonth').value;
         
         if(isNaN(sourceIdx)) return alert("Selecciona un mes");
@@ -293,36 +311,34 @@
         pendingExpense = null;
 
         const colSource = DETECTED_HEADERS[sourceIdx];
-        const colTarget = DETECTED_HEADERS[dataToSave.monthIdx];
+        const colTarget = DETECTED_HEADERS[transferData.monthIdx];
 
         document.getElementById('loader').style.display = 'flex';
-        document.getElementById('loadMsg').innerText = "Aplicando traslado en la nube...";
+        document.getElementById('loadMsg').innerText = "Registrando traslado...";
 
         try {
-            const line = budget.find(b => getSmartValue(b, ["CODIGO"]) == dataToSave.code);
+            const line = budget.find(b => getSmartValue(b, ["CODIGO"]) == transferData.code);
             let valSource = parseFloat(String(line[colSource]).replace(/\./g,'').replace(/,/g,'.')) || 0;
             let valTarget = parseFloat(String(line[colTarget]).replace(/\./g,'').replace(/,/g,'.')) || 0;
 
-            // A. Actualizar Presupuesto
             const updateData = {};
-            updateData[colSource] = valSource - dataToSave.missing;
-            updateData[colTarget] = valTarget + dataToSave.missing;
+            updateData[colSource] = valSource - transferData.missing;
+            updateData[colTarget] = valTarget + transferData.missing;
             const codeKey = Object.keys(line).find(k => k.toUpperCase() === "CODIGO") || "CODIGO";
 
-            await fetch(`${API_URL}/${codeKey}/${encodeURIComponent(dataToSave.code)}?sheet=Presupuesto`, {
+            await fetch(`${API_URL}/${codeKey}/${encodeURIComponent(transferData.code)}?sheet=Presupuesto`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ data: updateData })
             });
 
-            // B. Registrar Traslado
             const logData = {
                 "Fecha": new Date().toISOString().split('T')[0],
-                "Codigo": dataToSave.code,
+                "Codigo": transferData.code,
                 "Origen": colSource,
                 "Destino": colTarget,
-                "Valor": dataToSave.missing,
-                "Usuario": dataToSave.user
+                "Valor": transferData.missing,
+                "Usuario": transferData.user
             };
             await fetch(`${API_URL}?sheet=Traslados`, {
                 method: 'POST',
@@ -330,12 +346,11 @@
                 body: JSON.stringify({ data: [logData] })
             });
 
-            // C. Guardar Gasto
             document.getElementById('loadMsg').innerText = "Guardando gasto final...";
-            await saveExpense(dataToSave.code, dataToSave.ref, dataToSave.amount, dataToSave.date, false, dataToSave.user);
+            await saveExpense(transferData.code, transferData.ref, transferData.amount, transferData.date, false, transferData.user);
             
-            alert("✅ Operación Exitosa. Los datos están sincronizados.");
-            syncData(true); // Recarga final obligatoria
+            alert("✅ Operación Exitosa.");
+            syncData(true);
 
         } catch (e) {
             alert("Error: " + e.message);
@@ -345,10 +360,7 @@
 
     // --- GUARDAR GASTO ---
     async function saveExpense(code, ref, amount, date, hideLoader=true, explicitUser=null) {
-        if(hideLoader) {
-            document.getElementById('loader').style.display = 'flex';
-            document.getElementById('loadMsg').innerText = "Enviando a la nube...";
-        }
+        if(hideLoader) document.getElementById('loader').style.display = 'flex';
         
         const user = explicitUser || document.getElementById('uName').value || "WebUser";
         localStorage.setItem('u', user);
@@ -371,34 +383,35 @@
 
             if (!res.ok) throw new Error("Error al guardar");
 
-            // NO actualizamos el array local manualmente (expenses.push)
-            // Para ser pesimistas y seguros, recargamos de la nube.
-            
+            // No actualizamos localmente, forzamos recarga de nube para ser pesimistas
             if(hideLoader) {
-                await syncData(false); // Recarga silenciosa para actualizar tabla
+                await syncData(false);
                 document.getElementById('ref').value = "";
                 document.getElementById('amtDisplay').value = "";
                 
                 document.getElementById('loader').style.display = 'none';
-                const btn = document.getElementById('btnSave');
-                btn.disabled = false; btn.innerText = "Validar y Guardar";
                 
-                alert("✅ Gasto guardado y confirmado en la nube.");
+                const btn = document.querySelector('button[type="submit"]'); // Restaurar botón
+                if(btn) { btn.disabled = false; btn.innerText = "Validar y Guardar"; }
+
+                alert("✅ Guardado Correctamente");
             }
         } catch(e) {
             document.getElementById('loader').style.display = 'none';
-            const btn = document.getElementById('btnSave');
-            btn.disabled = false; btn.innerText = "Validar y Guardar";
+            const btn = document.querySelector('button[type="submit"]');
+            if(btn) { btn.disabled = false; btn.innerText = "Validar y Guardar"; }
+            
             if(hideLoader) alert("Error: " + e.message);
             else throw e;
         }
     }
 
     async function delExp(id) {
-        if(!confirm("¿Borrar de la base de datos?")) return;
+        if(!confirm("¿Borrar?")) return;
         document.getElementById('loader').style.display = 'flex';
         try {
             await fetch(`${API_URL}/id/${id}?sheet=Gastos`, { method: 'DELETE' });
+            // Recarga forzada tras borrar
             await syncData(false);
         } catch(e) { alert("Error: " + e.message); }
         document.getElementById('loader').style.display = 'none';
@@ -406,10 +419,8 @@
 
     function renderUI() {
         const sel = document.getElementById('selCode');
-        // Guardar seleccion actual
-        const currentSelection = sel.value;
+        const cur = sel.value;
         sel.innerHTML = '<option value="">-- Seleccionar --</option>';
-        
         budget.forEach(b => {
             const code = getSmartValue(b, ["CODIGO","Codigo"]);
             const desc = getSmartValue(b, ["DESCRIPCION","Descripcion"]) || "";
@@ -420,8 +431,7 @@
                 sel.appendChild(o);
             }
         });
-        // Restaurar seleccion si existe
-        if(currentSelection) sel.value = currentSelection;
+        if(cur) sel.value = cur;
 
         const expMap = {};
         let tSpent = 0;
@@ -482,3 +492,4 @@
 </script>
 </body>
 </html>
+
