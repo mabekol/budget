@@ -22,9 +22,9 @@
         button.accent { background: var(--accent); color: #004d40; width: 100%; }
         button.danger { background: var(--danger); padding: 5px 10px; font-size: 0.8em; }
         
-        /* KPI & TABLE */
         .kpi-box { display: flex; justify-content: space-between; text-align: center; }
         .kpi-val { font-size: 1.5rem; font-weight: bold; color: var(--primary); }
+        
         table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
         th { background: var(--primary); color: white; padding: 8px; text-align: left; }
         td { padding: 8px; border-bottom: 1px solid #eee; }
@@ -114,15 +114,16 @@
     // ==================================================
 
     let budget = [], expenses = [];
-    let DETECTED_HEADERS = new Array(12).fill(null); 
     
+    // Lista de posibles nombres para buscar en el Excel
     const MONTH_POSSIBILITIES = [
-        ["ENERO","Enero","ENE","JAN"], ["FEBRERO","Febrero","FEB"], ["MARZO","Marzo","MAR"],
-        ["ABRIL","Abril","ABR","APR"], ["MAYO","Mayo","MAY"], ["JUNIO","Junio","JUN"],
-        ["JULIO","Julio","JUL"], ["AGOSTO","Agosto","AGO","AUG"], ["SEPTIEMBRE","Septiembre","SEP"],
-        ["OCTUBRE","Octubre","OCT"], ["NOVIEMBRE","Noviembre","NOV"], ["DICIEMBRE","Diciembre","DIC"]
+        ["ENERO","Enero","ENE","JAN","January"], ["FEBRERO","Febrero","FEB","February"], ["MARZO","Marzo","MAR","March"],
+        ["ABRIL","Abril","ABR","APR","April"], ["MAYO","Mayo","MAY","May"], ["JUNIO","Junio","JUN","June"],
+        ["JULIO","Julio","JUL","July"], ["AGOSTO","Agosto","AGO","AUG","August"], ["SEPTIEMBRE","Septiembre","SEP","September"],
+        ["OCTUBRE","Octubre","OCT","October"], ["NOVIEMBRE","Noviembre","NOV","November"], ["DICIEMBRE","Diciembre","DIC","December"]
     ];
     const MONTH_LABELS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+    
     let pendingExpense = null;
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -140,13 +141,27 @@
         return parseFloat(document.getElementById('amtDisplay').value.replace(/\./g, '')) || 0;
     }
 
-    function detectMonthHeaders(sampleRow) {
-        if(!sampleRow) return;
-        const keys = Object.keys(sampleRow);
-        MONTH_POSSIBILITIES.forEach((possibles, idx) => {
-            const found = keys.find(k => possibles.includes(k.trim().toUpperCase()));
-            if(found) DETECTED_HEADERS[idx] = found;
-        });
+    // Busca el valor en el objeto probando varias llaves
+    function getSmartValue(obj, keys) {
+        if(!obj) return undefined;
+        const objKeys = Object.keys(obj);
+        for(const k of keys) {
+            const found = objKeys.find(ok => ok.trim().toUpperCase() === k.toUpperCase());
+            if(found) return obj[found];
+        }
+        return undefined;
+    }
+
+    // Función Nueva: Encuentra el nombre EXACTO de la columna en el objeto línea
+    function findRealColumnName(lineObj, monthIdx) {
+        const possibleNames = MONTH_POSSIBILITIES[monthIdx];
+        const objectKeys = Object.keys(lineObj);
+        
+        // Buscamos cuál de las llaves del objeto coincide con las posibles
+        const match = objectKeys.find(objKey => 
+            possibleNames.includes(objKey.trim().toUpperCase())
+        );
+        return match;
     }
 
     async function syncData() {
@@ -154,13 +169,10 @@
         try {
             const resB = await fetch(`${API_URL}?sheet=Presupuesto`);
             budget = await resB.json();
-            if(budget.length > 0) detectMonthHeaders(budget[0]);
-
             const resE = await fetch(`${API_URL}?sheet=Gastos`);
             expenses = await resE.json();
-
             renderUI();
-        } catch (e) { console.error(e); alert("Error: " + e.message); }
+        } catch (e) { console.error(e); alert("Error conectando: " + e.message); }
         document.getElementById('loader').style.display = 'none';
     }
 
@@ -173,11 +185,10 @@
         const ref = document.getElementById('ref').value;
         const monthIdx = parseInt(dateStr.split('-')[1]) - 1;
 
-        const line = budget.find(b => (b.CODIGO||b.Codigo||b.codigo) == code);
+        const line = budget.find(b => getSmartValue(b, ["CODIGO","Codigo","Code"]) == code);
         if (!line) return alert("Código no encontrado");
 
-        const header = DETECTED_HEADERS[monthIdx];
-        let rawBud = header ? line[header] : "0";
+        let rawBud = getSmartValue(line, MONTH_POSSIBILITIES[monthIdx]) || "0";
         if(typeof rawBud === 'string') rawBud = rawBud.replace(/\./g,'').replace(/,/g,'.');
         const budgetMonth = parseFloat(rawBud) || 0;
 
@@ -202,18 +213,21 @@
         const select = document.getElementById('modalSourceMonth');
         document.getElementById('modalTargetMonth').innerText = MONTH_LABELS[targetIdx];
         document.getElementById('modalMissing').innerText = fmt(missing);
+        
         select.innerHTML = '';
         
-        DETECTED_HEADERS.forEach((header, idx) => {
-            if (idx === targetIdx || !header) return;
+        MONTH_POSSIBILITIES.forEach((names, idx) => {
+            if (idx === targetIdx) return;
             
-            let rawBud = line[header] || "0";
+            let rawBud = getSmartValue(line, names) || "0";
             if(typeof rawBud === 'string') rawBud = rawBud.replace(/\./g,'').replace(/,/g,'.');
             const bud = parseFloat(rawBud) || 0;
 
             let spent = 0;
+            const codeVal = getSmartValue(line, ["CODIGO","Codigo"]);
+            
             expenses.forEach(x => {
-                if (x.code == (line.CODIGO||line.Codigo) && (parseInt(x.date.split('-')[1])-1) == idx) {
+                if (x.code == codeVal && (parseInt(x.date.split('-')[1])-1) == idx) {
                     spent += parseFloat(x.amount);
                 }
             });
@@ -233,36 +247,38 @@
 
     function closeModal() {
         document.getElementById('alertModal').style.display = 'none';
-        // NO borramos pendingExpense aquí para no perder los datos
+        // No borramos pendingExpense aqui para no perder datos
     }
 
-    // --- EJECUCIÓN DEL TRASLADO (CORREGIDO: COPIA DE DATOS) ---
+    // --- EJECUCIÓN DEL TRASLADO ---
     async function executeTransfer() {
         if(!pendingExpense) return;
         
-        // 1. Copia de seguridad de los datos antes de cerrar
+        // 1. Guardar datos antes de cerrar
         const transferData = { ...pendingExpense };
         const sourceIdx = document.getElementById('modalSourceMonth').value;
         
         if(isNaN(sourceIdx)) return alert("Selecciona un mes");
 
-        closeModal(); // Ahora sí cerramos
-        pendingExpense = null; // Limpiamos global
+        closeModal();
+        pendingExpense = null;
 
         const targetIdx = transferData.monthIdx;
         const amount = transferData.missing;
         const code = transferData.code;
 
-        const colSource = DETECTED_HEADERS[sourceIdx];
-        const colTarget = DETECTED_HEADERS[targetIdx];
-
-        if(!colSource || !colTarget) return alert("Error: No se identificaron columnas en la BD.");
-
         document.getElementById('loader').style.display = 'flex';
 
         try {
-            const line = budget.find(b => (b.CODIGO||b.Codigo) == code);
+            const line = budget.find(b => getSmartValue(b, ["CODIGO","Codigo"]) == code);
             
+            // BUSCAR EL NOMBRE REAL DE LAS COLUMNAS EN EL OBJETO
+            const colSource = findRealColumnName(line, sourceIdx);
+            const colTarget = findRealColumnName(line, targetIdx);
+
+            if(!colSource || !colTarget) throw new Error("No se encontraron las columnas en la BD (Revisa nombres de meses).");
+
+            // Calcular nuevos valores
             let valSource = parseFloat(String(line[colSource]).replace(/\./g,'').replace(/,/g,'.')) || 0;
             let valTarget = parseFloat(String(line[colTarget]).replace(/\./g,'').replace(/,/g,'.')) || 0;
 
@@ -270,6 +286,7 @@
             updateData[colSource] = valSource - amount;
             updateData[colTarget] = valTarget + amount;
 
+            // Llave primaria (CODIGO)
             const codeKey = Object.keys(line).find(k => k.toUpperCase() === "CODIGO") || "CODIGO";
 
             // PATCH SheetDB
@@ -281,7 +298,7 @@
 
             if(!res.ok) throw new Error("Error SheetDB: " + res.status);
 
-            // Guardar gasto usando la COPIA de los datos
+            // Guardar Gasto
             await saveExpense(code, transferData.ref, transferData.amount, transferData.date, false);
             
             alert("✅ Traslado realizado con éxito.");
@@ -293,89 +310,44 @@
         }
     }
 
-async function saveExpense(code, ref, amount, date, hideLoader = true) {
+    async function saveExpense(code, ref, amount, date, hideLoader=true) {
         if(hideLoader) document.getElementById('loader').style.display = 'flex';
         
-        const user = document.getElementById('uName').value || localStorage.getItem('u') || "Anónimo";
+        const user = "Usuario Web"; // Puedes agregar input de usuario si quieres
 
-        // PREPARAMOS EL PAQUETE DE DATOS
-        // Enviamos las llaves en varios formatos para asegurar que coincidan con tu Excel
-        // SheetDB ignorará las columnas que no existan en el Excel.
+        // Datos robustos para SheetDB (Array de 1 objeto)
         const rowData = {
             "id": Date.now(),
-            "ID": Date.now(),
-            
-            "user": user,
-            "User": user,
-            "Usuario": user,
-            "USUARIO": user,
-            
-            "code": code,
-            "Code": code,
-            "Codigo": code,
-            "CODIGO": code,
-            
-            "ref": ref,
-            "Ref": ref,
-            "Referencia": ref,
-            "REFERENCIA": ref,
-            
-            "amount": amount,
-            "Amount": amount,
-            "Monto": amount,
-            "MONTO": amount,
-            "Valor": amount,
-            
-            "date": date,
-            "Date": date,
-            "Fecha": date,
-            "FECHA": date
+            "code": code, "Code": code, "CODIGO": code,
+            "ref": ref, "Ref": ref, "REFERENCIA": ref,
+            "amount": amount, "Amount": amount, "MONTO": amount,
+            "date": date, "Date": date, "FECHA": date,
+            "user": user, "User": user, "USUARIO": user
         };
 
         try {
-            // ENVIAR A SHEETDB (Hoja Gastos)
-            // Nota: Enviamos 'data' como un Array [rowData]
             const res = await fetch(`${API_URL}?sheet=Gastos`, {
                 method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ data: [rowData] })
             });
 
-            if (!res.ok) throw new Error("SheetDB rechazó el guardado (" + res.status + ")");
-            
-            // Si llegamos aquí, se guardó en la nube
-            // Guardamos en local para verlo inmediato
-            // (Usamos nombres estandarizados internamente)
-            expenses.push({
-                id: rowData.id,
-                code: code,
-                ref: ref,
-                amount: amount,
-                date: date,
-                user: user
-            });
+            if (!res.ok) throw new Error("Error guardando gasto");
 
+            expenses.push({ code, ref, amount, date, id: rowData.id });
+            
             if(hideLoader) {
                 renderUI();
-                // Limpiar formulario
                 document.getElementById('ref').value = "";
                 document.getElementById('amtDisplay').value = "";
                 document.getElementById('loader').style.display = 'none';
-                alert("✅ Gasto registrado en la Nube correctamente.");
+                alert("✅ Guardado");
             }
-
-        } catch (e) {
-            console.error(e);
-            if(hideLoader) {
+        } catch(e) {
+            if(hideLoader) { 
                 document.getElementById('loader').style.display = 'none';
-                alert("⚠️ Error al guardar en la hoja Gastos: " + e.message);
-            } else {
-                // Si viene de un traslado, lanzamos el error hacia arriba
-                throw e;
-            }
+                alert("Error: " + e.message); 
+            } else { throw e; }
         }
     }
 
@@ -392,10 +364,12 @@ async function saveExpense(code, ref, amount, date, hideLoader = true) {
 
     function renderUI() {
         const sel = document.getElementById('selCode');
+        const cur = sel.value;
         sel.innerHTML = '<option value="">-- Seleccionar --</option>';
+        
         budget.forEach(b => {
-            const code = b.CODIGO || b.Codigo || b.codigo;
-            const desc = b.DESCRIPCION || b.Descripcion || b.descripcion || "";
+            const code = getSmartValue(b, ["CODIGO","Codigo"]);
+            const desc = getSmartValue(b, ["DESCRIPCION","Descripcion"]) || "";
             if(code) {
                 const o = document.createElement('option');
                 o.value = code;
@@ -403,6 +377,7 @@ async function saveExpense(code, ref, amount, date, hideLoader = true) {
                 sel.appendChild(o);
             }
         });
+        sel.value = cur;
 
         const expMap = {};
         let tSpent = 0;
@@ -410,7 +385,8 @@ async function saveExpense(code, ref, amount, date, hideLoader = true) {
             if(!x.date) return;
             const p = x.date.split('-');
             const m = parseInt(p[1])-1;
-            expMap[`${x.code}-${m}`] = (expMap[`${x.code}-${m}`]||0) + Number(x.amount);
+            const k = `${x.code}-${m}`;
+            expMap[k] = (expMap[k]||0) + Number(x.amount);
             tSpent += Number(x.amount);
         });
 
@@ -419,16 +395,16 @@ async function saveExpense(code, ref, amount, date, hideLoader = true) {
         let tBud = 0;
 
         budget.forEach(l => {
-            const code = l.CODIGO || l.Codigo || l.codigo;
+            const code = getSmartValue(l, ["CODIGO","Codigo"]);
             if(!code) return;
             
+            let total = Number(getSmartValue(l, ["TOTAL","Total"])||0);
             const tr = document.createElement('tr');
             let h = `<td><b>${code}</b></td>`;
             let rowSum = 0;
             
             for(let i=0; i<12; i++) {
-                const header = DETECTED_HEADERS[i];
-                let rawVal = header ? l[header] : "0";
+                let rawVal = getSmartValue(l, MONTH_POSSIBLE_NAMES[i]) || "0";
                 if(typeof rawVal === 'string') rawVal = rawVal.replace(/\./g, '').replace(/,/g, '.');
                 let b = Number(rawVal) || 0;
                 rowSum += b;
@@ -437,7 +413,6 @@ async function saveExpense(code, ref, amount, date, hideLoader = true) {
                 let color = s > b ? 'red' : (s > 0 ? '#27ae60' : '#ccc');
                 h += `<td>${b?fmt(b):'-'}<br><span style="color:${color};font-weight:bold;font-size:0.85em">${s?fmt(s):''}</span></td>`;
             }
-            let total = Number(l.TOTAL || l.Total || 0);
             if(total===0) total = rowSum;
             tBud += total;
             h += `<td><b>${fmt(total)}</b></td>`;
@@ -462,4 +437,3 @@ async function saveExpense(code, ref, amount, date, hideLoader = true) {
 </script>
 </body>
 </html>
-
