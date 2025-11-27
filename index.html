@@ -7,9 +7,9 @@
     <style>
         /* === IDENTIDAD VISUAL SAINT AUBIN === */
         :root {
-            --primary: #002B5C;       /* Azul Oscuro Corporativo */
-            --accent: #00A3E0;        /* Azul Celeste Brillante */
-            --bg: #F4F7FA;            /* Fondo Gris Azulado muy claro */
+            --primary: #002B5C;       /* Azul Oscuro */
+            --accent: #00A3E0;        /* Azul Celeste */
+            --bg: #F4F7FA;            /* Fondo */
             --white: #ffffff;
             --text: #2C3E50;
             --danger: #D32F2F;
@@ -17,7 +17,7 @@
         }
         
         body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); padding: 20px; color: var(--text); font-size:14px; }
-        .container { max-width: 1300px; margin: 0 auto; }
+        .container { max-width: 1300px; margin: 0 auto; display:none; /* Oculto hasta login */ }
         
         /* HEADER */
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; border-bottom: 3px solid var(--accent); padding-bottom: 15px; }
@@ -58,13 +58,12 @@
         tr:hover { background-color: #f9fcff; }
         
         /* LOADER & MODAL */
-        #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 999; display: none; }
+        #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.95); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 999; }
         .spinner { width: 40px; height: 40px; border: 4px solid #ecf0f1; border-top: 4px solid var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 15px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
         .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,43,92,0.6); display:none; justify-content:center; align-items:center; z-index:1000; backdrop-filter: blur(3px); }
-        .modal { background: white; padding: 30px; border-radius: 8px; width: 90%; max-width: 450px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); border-top: 6px solid var(--danger); animation: slideDown 0.3s ease; }
-        @keyframes slideDown { from {transform: translateY(-30px); opacity:0;} to {transform: translateY(0); opacity:1;} }
+        .modal { background: white; padding: 30px; border-radius: 8px; width: 90%; max-width: 450px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); border-top: 6px solid var(--danger); }
         
         .transfer-box { background: #fff5f5; padding: 15px; border-radius: 5px; border: 1px solid #fed7d7; margin-top: 15px; }
     </style>
@@ -78,26 +77,6 @@
     <button onclick="checkPass()" style="margin-top:20px; background:#00A3E0; color:white; border:none; padding:12px 40px; font-weight:bold; cursor:pointer; border-radius:30px; transition:0.3s;">ENTRAR</button>
     <p id="loginMsg" style="color:#ff6b6b; margin-top:15px; display:none; font-weight:bold;">⚠️ Contraseña Incorrecta</p>
 </div>
-
-<script>
-    function checkPass() {
-        const p = document.getElementById('passInput').value;
-        if(p === "SaintAubin2025") {
-            document.getElementById('loginScreen').style.display = 'none';
-            localStorage.setItem('auth', 'true');
-        } else {
-            document.getElementById('loginMsg').style.display = 'block';
-        }
-    }
-    function logout() {
-        localStorage.removeItem('auth');
-        location.reload();
-    }
-    // Verificar si ya está logueado
-    if(localStorage.getItem('auth') === 'true') {
-        document.getElementById('loginScreen').style.display = 'none';
-    }
-</script>
 
 <div id="loader">
     <div class="spinner"></div>
@@ -124,7 +103,7 @@
     </div>
 </div>
 
-<div class="container">
+<div class="container" id="mainContainer">
     <div class="header">
         <div class="brand">
             <h1>Saint Aubin <span>International</span></h1>
@@ -154,7 +133,7 @@
                 <select id="selCode" required><option>Cargando códigos...</option></select>
                 
                 <label>Concepto / Referencia</label>
-                <input type="text" id="ref" placeholder="Ej: Factura 123 - Compra Insumos" required>
+                <input type="text" id="ref" placeholder="Ej: Factura 123" required>
                 
                 <div style="display:flex; gap:15px;">
                     <div style="flex:1">
@@ -171,7 +150,7 @@
         </div>
 
         <div class="card">
-            <h2>Últimos Gastos Registrados</h2>
+            <h2>Últimos Gastos</h2>
             <div class="table-wrap" style="max-height:380px">
                 <table id="histTable">
                     <thead><tr><th>Fecha</th><th>Solicitante</th><th>Concepto</th><th>Monto</th><th></th></tr></thead>
@@ -210,12 +189,82 @@
     const MONTH_LABELS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
     let pendingExpense = null;
 
+    // --- LÓGICA DE INICIO Y LOGIN ---
     document.addEventListener('DOMContentLoaded', () => {
+        // 1. Verificar si ya está logueado
+        if(localStorage.getItem('auth') === 'true') {
+            unlockApp();
+        }
+    });
+
+    function checkPass() {
+        const p = document.getElementById('passInput').value;
+        if(p === "SaintAubin2025") {
+            localStorage.setItem('auth', 'true');
+            unlockApp();
+        } else {
+            document.getElementById('loginMsg').style.display = 'block';
+        }
+    }
+
+    function unlockApp() {
+        // Ocultar login, mostrar app
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('mainContainer').style.display = 'block';
+        
+        // Cargar usuario guardado
         const u = localStorage.getItem('u');
         if(u) document.getElementById('uName').value = u;
         document.getElementById('date').valueAsDate = new Date();
-        syncData(true); 
-    });
+        
+        // INICIAR CARGA DE DATOS AHORA
+        syncData(true);
+    }
+
+    function logout() {
+        localStorage.removeItem('auth');
+        location.reload();
+    }
+
+    // --- SINCRONIZACIÓN ROBUSTA (AUTO-RETRY) ---
+    async function syncData(showLoaderUI = false) {
+        if(showLoaderUI) {
+            document.getElementById('loader').style.display = 'flex';
+            document.getElementById('loadMsg').innerText = "Sincronizando base de datos...";
+        }
+        
+        let attempts = 0;
+        let success = false;
+        
+        while(attempts < 2 && !success) { // Intentar 2 veces
+            attempts++;
+            try {
+                const ts = Date.now();
+                const resB = await fetch(`${API_URL}?sheet=Presupuesto&t=${ts}`);
+                budget = await resB.json();
+                
+                // Si llega vacío en el primer intento, asumimos Cold Start y forzamos error para reintentar
+                if((!budget || budget.length === 0) && attempts === 1) throw new Error("Cold Start");
+
+                if(budget.length > 0) detectMonthHeaders(budget[0]);
+
+                const resE = await fetch(`${API_URL}?sheet=Gastos&t=${ts}`);
+                expenses = await resE.json();
+
+                renderUI();
+                success = true;
+            } catch (e) {
+                console.warn("Intento fallido:", e);
+                if(attempts === 1) {
+                    if(showLoaderUI) document.getElementById('loadMsg').innerText = "Iniciando servicios (Reintentando)...";
+                    await new Promise(r => setTimeout(r, 1500)); // Esperar 1.5s
+                }
+            }
+        }
+        
+        if(!success && showLoaderUI) alert("⚠️ No se pudieron cargar los datos. Intenta 'Actualizar' nuevamente.");
+        if(showLoaderUI) document.getElementById('loader').style.display = 'none';
+    }
 
     // --- UTILIDADES ---
     function formatCurrencyInput(input) {
@@ -244,42 +293,14 @@
         });
     }
 
-    async function syncData(showLoaderUI = false) {
-        if(showLoaderUI) {
-            document.getElementById('loader').style.display = 'flex';
-            document.getElementById('loadMsg').innerText = "Sincronizando base de datos...";
-        }
-        
-        try {
-            const ts = Date.now() + Math.random();
-            const resB = await fetch(`${API_URL}?sheet=Presupuesto&t=${ts}`);
-            budget = await resB.json();
-            
-            if(budget.length === 0 && showLoaderUI) {
-                document.getElementById('loadMsg').innerText = "Iniciando servicios (Cold Start)...";
-                setTimeout(() => syncData(showLoaderUI), 1500);
-                return;
-            }
-
-            if(budget.length > 0) detectMonthHeaders(budget[0]);
-
-            const resE = await fetch(`${API_URL}?sheet=Gastos&t=${ts}`);
-            expenses = await resE.json();
-
-            renderUI();
-        } catch (e) { 
-            console.error(e); 
-            if(showLoaderUI) alert("Error de conexión: " + e.message); 
-        }
-        if(showLoaderUI) document.getElementById('loader').style.display = 'none';
-    }
-
+    // --- VALIDACIÓN ---
     async function tryAddExpense(e) {
         e.preventDefault();
         const btn = document.getElementById('btnSave');
         btn.disabled = true; btn.innerText = "Verificando...";
         
-        await syncData(false); 
+        // Recargar datos frescos antes de validar
+        await syncData(false);
 
         const code = document.getElementById('selCode').value;
         const amount = getAmountValue();
@@ -296,4 +317,257 @@
         }
 
         const header = DETECTED_HEADERS[monthIdx];
-        let
+        let rawBud = header ? line[header] : "0";
+        if(typeof rawBud === 'string') rawBud = rawBud.replace(/\./g,'').replace(/,/g,'.');
+        const budgetMonth = parseFloat(rawBud) || 0;
+
+        let spentMonth = 0;
+        expenses.forEach(x => {
+            const xCode = getSmartValue(x, ["code", "Code", "Codigo", "CODIGO"]);
+            const xDate = getSmartValue(x, ["date", "Date", "Fecha", "FECHA"]);
+            const xAmt = parseFloat(getSmartValue(x, ["amount", "Amount", "Monto", "MONTO"])) || 0;
+
+            if (xCode == code && xDate && (parseInt(xDate.split('-')[1])-1) == monthIdx) {
+                spentMonth += xAmt;
+            }
+        });
+
+        if (amount > (budgetMonth - spentMonth)) {
+            const missing = amount - (budgetMonth - spentMonth);
+            pendingExpense = { 
+                code, amount, date: dateStr, ref, monthIdx, missing,
+                user: document.getElementById('uName').value
+            };
+            openModal(line, monthIdx, pendingExpense.missing);
+            btn.disabled = false; btn.innerText = "Validar Disponibilidad";
+        } else {
+            saveExpense(code, ref, amount, dateStr);
+        }
+    }
+
+    function openModal(line, targetIdx, missing) {
+        const select = document.getElementById('modalSourceMonth');
+        document.getElementById('modalTargetMonth').innerText = MONTH_LABELS[targetIdx];
+        document.getElementById('modalMissing').innerText = fmt(missing);
+        select.innerHTML = '';
+        
+        DETECTED_HEADERS.forEach((header, idx) => {
+            if (idx === targetIdx || !header) return;
+            let rawBud = line[header] || "0";
+            if(typeof rawBud === 'string') rawBud = rawBud.replace(/\./g,'').replace(/,/g,'.');
+            const bud = parseFloat(rawBud) || 0;
+            
+            let spent = 0;
+            const codeVal = getSmartValue(line, ["CODIGO"]);
+            expenses.forEach(x => {
+                const xCode = getSmartValue(x, ["code", "Code", "Codigo", "CODIGO"]);
+                const xDate = getSmartValue(x, ["date", "Date", "Fecha", "FECHA"]);
+                const xAmt = parseFloat(getSmartValue(x, ["amount", "Amount", "Monto", "MONTO"])) || 0;
+                if (xCode == codeVal && xDate && (parseInt(xDate.split('-')[1])-1) == idx) {
+                    spent += xAmt;
+                }
+            });
+
+            if ((bud - spent) >= missing) {
+                const opt = document.createElement('option');
+                opt.value = idx;
+                opt.text = `${MONTH_LABELS[idx]} (Disp: ${fmt(bud-spent)})`;
+                select.appendChild(opt);
+            }
+        });
+
+        if (select.options.length === 0) select.innerHTML = '<option>⛔ Sin fondos</option>';
+        document.getElementById('alertModal').style.display = 'flex';
+    }
+
+    function closeModal() {
+        document.getElementById('alertModal').style.display = 'none';
+        pendingExpense = null;
+    }
+
+    // --- EJECUCIÓN DEL TRASLADO ---
+    async function executeTransfer() {
+        if(!pendingExpense) return;
+        
+        const transferData = { ...pendingExpense };
+        const sourceIdx = document.getElementById('modalSourceMonth').value;
+        
+        if(isNaN(sourceIdx)) return alert("Selecciona un mes origen");
+
+        closeModal();
+        pendingExpense = null;
+
+        const colSource = DETECTED_HEADERS[sourceIdx];
+        const colTarget = DETECTED_HEADERS[transferData.monthIdx];
+
+        document.getElementById('loader').style.display = 'flex';
+        document.getElementById('loadMsg').innerText = "Registrando traslado...";
+
+        try {
+            const line = budget.find(b => getSmartValue(b, ["CODIGO"]) == transferData.code);
+            let valSource = parseFloat(String(line[colSource]).replace(/\./g,'').replace(/,/g,'.')) || 0;
+            let valTarget = parseFloat(String(line[colTarget]).replace(/\./g,'').replace(/,/g,'.')) || 0;
+
+            const updateData = {};
+            updateData[colSource] = valSource - transferData.missing;
+            updateData[colTarget] = valTarget + transferData.missing;
+            const codeKey = Object.keys(line).find(k => k.toUpperCase() === "CODIGO") || "CODIGO";
+
+            await fetch(`${API_URL}/${codeKey}/${encodeURIComponent(transferData.code)}?sheet=Presupuesto`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: updateData })
+            });
+
+            const logData = {
+                "Fecha": new Date().toISOString().split('T')[0],
+                "Codigo": transferData.code,
+                "Origen": colSource,
+                "Destino": colTarget,
+                "Valor": transferData.missing,
+                "Usuario": transferData.user
+            };
+            await fetch(`${API_URL}?sheet=Traslados`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: [logData] })
+            });
+
+            document.getElementById('loadMsg').innerText = "Guardando gasto final...";
+            await saveExpense(transferData.code, transferData.ref, transferData.amount, transferData.date, false, transferData.user);
+            
+            alert("✅ Traslado realizado correctamente.");
+            syncData(true);
+
+        } catch (e) {
+            alert("Error: " + e.message);
+            document.getElementById('loader').style.display = 'none';
+        }
+    }
+
+    // --- GUARDAR GASTO ---
+    async function saveExpense(code, ref, amount, date, hideLoader=true, explicitUser=null) {
+        if(hideLoader) document.getElementById('loader').style.display = 'flex';
+        
+        const user = explicitUser || document.getElementById('uName').value || "WebUser";
+        localStorage.setItem('u', user);
+
+        const rowData = {
+            "id": Date.now(),
+            "code": code, "CODIGO": code, "Codigo": code,
+            "ref": ref, "REFERENCIA": ref, "Referencia": ref,
+            "amount": amount, "MONTO": amount, "Monto": amount,
+            "date": date, "FECHA": date, "Fecha": date,
+            "user": user, "USUARIO": user, "Usuario": user
+        };
+
+        try {
+            const res = await fetch(`${API_URL}?sheet=Gastos`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: [rowData] })
+            });
+
+            if (!res.ok) throw new Error("Error al guardar en Gastos");
+
+            if(hideLoader) {
+                await syncData(false); 
+                document.getElementById('ref').value = "";
+                document.getElementById('amtDisplay').value = "";
+                document.getElementById('loader').style.display = 'none';
+                
+                const btn = document.getElementById('btnSave');
+                btn.disabled = false; btn.innerText = "Validar Disponibilidad";
+                alert("✅ Gasto registrado.");
+            }
+        } catch(e) {
+            document.getElementById('loader').style.display = 'none';
+            const btn = document.getElementById('btnSave');
+            btn.disabled = false; btn.innerText = "Validar Disponibilidad";
+            if(hideLoader) alert("Error: " + e.message); else throw e;
+        }
+    }
+
+    function renderUI() {
+        const sel = document.getElementById('selCode');
+        const cur = sel.value;
+        sel.innerHTML = '<option value="">-- Seleccionar Rubro --</option>';
+        
+        budget.forEach(b => {
+            const code = getSmartValue(b, ["CODIGO","Codigo"]);
+            const desc = getSmartValue(b, ["DESCRIPCION","Descripcion"]) || "";
+            if(code) {
+                const o = document.createElement('option');
+                o.value = code;
+                o.text = `${code} - ${desc.substring(0,30)}`;
+                sel.appendChild(o);
+            }
+        });
+        if(cur) sel.value = cur;
+
+        const expMap = {};
+        let tSpent = 0;
+        expenses.forEach(x => {
+            const d = getSmartValue(x, ["date","Date","Fecha","FECHA"]);
+            if(!d) return;
+            const p = d.split('-');
+            const m = parseInt(p[1])-1;
+            const c = getSmartValue(x, ["code","Code","Codigo","CODIGO"]);
+            const val = parseFloat(getSmartValue(x, ["amount","Amount","Monto","MONTO"])) || 0;
+            const k = `${c}-${m}`;
+            expMap[k] = (expMap[k]||0) + val;
+            tSpent += val;
+        });
+
+        const tb = document.querySelector('#mainTable tbody');
+        tb.innerHTML = '';
+        let tBud = 0;
+
+        budget.forEach(l => {
+            const code = getSmartValue(l, ["CODIGO","Codigo"]);
+            if(!code) return;
+            
+            const tr = document.createElement('tr');
+            let h = `<td><b>${code}</b></td>`;
+            let rowSum = 0;
+            
+            for(let i=0; i<12; i++) {
+                const header = DETECTED_HEADERS[i];
+                let rawVal = header ? l[header] : "0";
+                if(typeof rawVal === 'string') rawVal = rawVal.replace(/\./g, '').replace(/,/g, '.');
+                let b = Number(rawVal) || 0;
+                rowSum += b;
+                
+                let s = expMap[`${code}-${i}`]||0;
+                let color = s > b ? '#e74c3c' : (s > 0 ? '#27ae60' : '#95a5a6');
+                h += `<td>${b?fmt(b):'-'}<br><span style="color:${color};font-weight:bold;font-size:0.85em">${s?fmt(s):''}</span></td>`;
+            }
+            let total = Number(getSmartValue(l, ["TOTAL","Total"])||0);
+            if(total===0) total = rowSum;
+            tBud += total;
+            h += `<td><b>${fmt(total)}</b></td>`;
+            tr.innerHTML = h;
+            tb.appendChild(tr);
+        });
+
+        document.getElementById('kTotal').innerText = fmt(tBud);
+        document.getElementById('kAvail').innerText = fmt(tBud-tSpent);
+        document.getElementById('kPerc').innerText = tBud>0 ? ((tSpent/tBud)*100).toFixed(1)+"%" : "0%";
+
+        const th = document.querySelector('#histTable tbody');
+        th.innerHTML = '';
+        [...expenses].sort((a,b)=>getSmartValue(b,["id"])-getSmartValue(a,["id"])).slice(0,10).forEach(x => {
+            const r = document.createElement('tr');
+            const d = getSmartValue(x, ["date","Date","Fecha","FECHA"]);
+            const u = getSmartValue(x, ["user","User","Usuario","USUARIO"]) || "-";
+            const rf = getSmartValue(x, ["ref","Ref","Referencia"]);
+            const am = getSmartValue(x, ["amount","Amount","Monto"]);
+            r.innerHTML = `<td>${d}</td><td>${u}</td><td>${rf}</td><td style="font-weight:bold">${fmt(am)}</td><td style="text-align:right"></td>`;
+            th.appendChild(r);
+        });
+    }
+
+    function fmt(n) { return new Intl.NumberFormat('es-CO', {maximumFractionDigits:0}).format(n); }
+</script>
+</body>
+</html>
