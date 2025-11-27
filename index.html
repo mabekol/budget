@@ -21,6 +21,7 @@
         button { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; color: white; background: var(--primary); transition: 0.2s; }
         button.accent { background: var(--accent); color: #004d40; width: 100%; }
         button.danger { background: var(--danger); padding: 5px 10px; font-size: 0.8em; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
         
         .kpi-box { display: flex; justify-content: space-between; text-align: center; }
         .kpi-val { font-size: 1.5rem; font-weight: bold; color: var(--primary); }
@@ -31,7 +32,7 @@
         .table-wrap { overflow-x: auto; }
         
         /* LOADER & MODAL */
-        #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.9); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 999; display: none; }
+        #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 999; display: none; }
         
         .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); display:none; justify-content:center; align-items:center; z-index:1000; }
         .modal { background: white; padding: 25px; border-radius: 10px; width: 90%; max-width: 450px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); border-top: 5px solid var(--danger); }
@@ -41,18 +42,18 @@
 </head>
 <body>
 
-<div id="loader"><h2>🔄 Procesando...</h2><p id="loadMsg">Conectando...</p></div>
+<div id="loader"><h2>🔄 Conectando con la Nube...</h2><p id="loadMsg">Por favor espera, esto asegura que los datos sean reales.</p></div>
 
 <div id="alertModal" class="modal-overlay">
     <div class="modal">
         <h3>⚠️ Saldo Insuficiente</h3>
-        <p>No tienes fondos en <b id="modalTargetMonth"></b>.</p>
+        <p>No tienes fondos suficientes en <b id="modalTargetMonth"></b>.</p>
         <p>Faltan: <b id="modalMissing" style="color:var(--danger)"></b></p>
         
         <div class="transfer-box">
             <label>Trasladar fondos desde:</label>
             <select id="modalSourceMonth"></select>
-            <small style="color:#666">Meses con saldo disponible.</small>
+            <small style="color:#666">Solo aparecen meses con saldo real disponible.</small>
         </div>
         
         <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
@@ -65,7 +66,7 @@
 <div class="container">
     <div class="header">
         <h1>G&C <span style="color:var(--accent)">SOLUTIONS</span></h1>
-        <button onclick="syncData()">Actualizar</button>
+        <button onclick="syncData(true)">🔄 Forzar Actualización</button>
     </div>
 
     <div class="card kpi-box">
@@ -78,21 +79,20 @@
         <div class="card">
             <h2>Registrar Gasto</h2>
             <form onsubmit="tryAddExpense(event)">
-                <label>Usuario</label><input type="text" id="uName" required placeholder="Tu nombre">
                 <label>Código</label><select id="selCode" required><option>Cargando...</option></select>
                 <label>Referencia</label><input type="text" id="ref" required>
                 <div style="display:flex; gap:10px">
                     <div style="flex:1"><label>Monto</label><input type="text" id="amtDisplay" placeholder="$ 0" required oninput="formatCurrencyInput(this)"></div>
                     <div style="flex:1"><label>Fecha</label><input type="date" id="date" required></div>
                 </div>
-                <button type="submit" class="accent">Validar y Guardar</button>
+                <button type="submit" id="btnSave" class="accent">Validar y Guardar</button>
             </form>
         </div>
 
         <div class="card">
             <h2>Últimos Movimientos (Gastos)</h2>
             <div class="table-wrap" style="max-height:300px">
-                <table id="histTable"><thead><tr><th>Fecha</th><th>Usuario</th><th>Ref</th><th>Monto</th><th></th></tr></thead><tbody></tbody></table>
+                <table id="histTable"><thead><tr><th>Fecha</th><th>Ref</th><th>Monto</th><th></th></tr></thead><tbody></tbody></table>
             </div>
         </div>
     </div>
@@ -130,7 +130,7 @@
         const u = localStorage.getItem('u');
         if(u) document.getElementById('uName').value = u;
         document.getElementById('date').valueAsDate = new Date();
-        syncData();
+        syncData(true); // Carga inicial forzada
     });
 
     // --- UTILIDADES ---
@@ -160,29 +160,42 @@
         });
     }
 
-    async function syncData() {
-        document.getElementById('loader').style.display = 'flex';
+    // --- SINCRONIZACIÓN ESTRICTA ---
+    async function syncData(showLoaderUI = false) {
+        if(showLoaderUI) {
+            document.getElementById('loader').style.display = 'flex';
+            document.getElementById('loadMsg').innerText = "Verificando datos en la nube...";
+        }
+        
         try {
-            const resB = await fetch(`${API_URL}?sheet=Presupuesto`);
+            // Cache-busting: Agregamos timestamp para evitar que el navegador use datos viejos
+            const ts = new Date().getTime();
+            
+            const resB = await fetch(`${API_URL}?sheet=Presupuesto&t=${ts}`);
             budget = await resB.json();
             if(budget.length > 0) detectMonthHeaders(budget[0]);
 
-            const resE = await fetch(`${API_URL}?sheet=Gastos`);
+            const resE = await fetch(`${API_URL}?sheet=Gastos&t=${ts}`);
             expenses = await resE.json();
 
             renderUI();
         } catch (e) { console.error(e); alert("Error conectando: " + e.message); }
-        document.getElementById('loader').style.display = 'none';
+        
+        if(showLoaderUI) document.getElementById('loader').style.display = 'none';
     }
 
-    // --- VALIDACIÓN ---
-    function tryAddExpense(e) {
+    // --- VALIDACIÓN (AHORA RECARGA ANTES DE VALIDAR) ---
+    async function tryAddExpense(e) {
         e.preventDefault();
         
-        // Bloquear botón para evitar doble clic
-        const btn = e.target.querySelector('button[type="submit"]');
+        // Bloqueo de seguridad UI
+        const btn = document.getElementById('btnSave');
         btn.disabled = true;
-        btn.innerText = "Verificando...";
+        btn.innerText = "Verificando en Nube...";
+        
+        // PASO CRÍTICO: Volvemos a descargar los datos ANTES de validar
+        // Esto asegura que si alguien más gastó o si hubo error, lo sepamos
+        await syncData(true); 
 
         const code = document.getElementById('selCode').value;
         const amount = getAmountValue();
@@ -210,22 +223,23 @@
             }
         });
 
-        // Reactivamos botón si hay validación pendiente (Modal), si no, guardamos
-        if (amount > (budgetMonth - spentMonth)) {
+        const available = budgetMonth - spentMonth;
+
+        if (amount > available) {
+            const missing = amount - available;
             pendingExpense = { 
                 code, amount, date: dateStr, ref, monthIdx, 
-                missing: amount - (budgetMonth - spentMonth),
-                user: document.getElementById('uName').value
+                missing,
+                user: localStorage.getItem('u') || "WebUser"
             };
             openModal(line, monthIdx, pendingExpense.missing);
             
-            // Restauramos botón porque el usuario "canceló" la acción directa
-            // ahora la acción depende del Modal
+            // Restaurar botón para reintento futuro
             btn.disabled = false; 
             btn.innerText = "Validar y Guardar";
         } else {
-            saveExpense(code, ref, amount, dateStr);
-            // El botón se restaura dentro de saveExpense al terminar
+            await saveExpense(code, ref, amount, dateStr);
+            // El botón se restaura dentro de saveExpense
         }
     }
 
@@ -237,10 +251,11 @@
         
         DETECTED_HEADERS.forEach((header, idx) => {
             if (idx === targetIdx || !header) return;
+            
             let rawBud = line[header] || "0";
             if(typeof rawBud === 'string') rawBud = rawBud.replace(/\./g,'').replace(/,/g,'.');
             const bud = parseFloat(rawBud) || 0;
-            
+
             let spent = 0;
             const codeVal = getSmartValue(line, ["CODIGO"]);
             expenses.forEach(x => {
@@ -268,45 +283,46 @@
     // --- TRASLADO ---
     async function executeTransfer() {
         if(!pendingExpense) return;
+        
+        const dataToSave = { ...pendingExpense };
         const sourceIdx = document.getElementById('modalSourceMonth').value;
+        
         if(isNaN(sourceIdx)) return alert("Selecciona un mes");
 
-        // Bloqueo visual
-        document.getElementById('loader').style.display = 'flex';
-        document.getElementById('alertModal').style.display = 'none'; // Cerrar modal visualmente
-
-        // Captura de datos
-        const transferData = { ...pendingExpense };
-        pendingExpense = null; // Limpiar memoria
+        closeModal();
+        pendingExpense = null;
 
         const colSource = DETECTED_HEADERS[sourceIdx];
-        const colTarget = DETECTED_HEADERS[transferData.monthIdx];
+        const colTarget = DETECTED_HEADERS[dataToSave.monthIdx];
+
+        document.getElementById('loader').style.display = 'flex';
+        document.getElementById('loadMsg').innerText = "Aplicando traslado en la nube...";
 
         try {
-            const line = budget.find(b => getSmartValue(b, ["CODIGO"]) == transferData.code);
+            const line = budget.find(b => getSmartValue(b, ["CODIGO"]) == dataToSave.code);
             let valSource = parseFloat(String(line[colSource]).replace(/\./g,'').replace(/,/g,'.')) || 0;
             let valTarget = parseFloat(String(line[colTarget]).replace(/\./g,'').replace(/,/g,'.')) || 0;
 
-            // 1. Actualizar Presupuesto
+            // A. Actualizar Presupuesto
             const updateData = {};
-            updateData[colSource] = valSource - transferData.missing;
-            updateData[colTarget] = valTarget + transferData.missing;
+            updateData[colSource] = valSource - dataToSave.missing;
+            updateData[colTarget] = valTarget + dataToSave.missing;
             const codeKey = Object.keys(line).find(k => k.toUpperCase() === "CODIGO") || "CODIGO";
 
-            await fetch(`${API_URL}/${codeKey}/${encodeURIComponent(transferData.code)}?sheet=Presupuesto`, {
+            await fetch(`${API_URL}/${codeKey}/${encodeURIComponent(dataToSave.code)}?sheet=Presupuesto`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ data: updateData })
             });
 
-            // 2. Registrar Traslado
+            // B. Registrar Traslado
             const logData = {
                 "Fecha": new Date().toISOString().split('T')[0],
-                "Codigo": transferData.code,
+                "Codigo": dataToSave.code,
                 "Origen": colSource,
                 "Destino": colTarget,
-                "Valor": transferData.missing,
-                "Usuario": transferData.user
+                "Valor": dataToSave.missing,
+                "Usuario": dataToSave.user
             };
             await fetch(`${API_URL}?sheet=Traslados`, {
                 method: 'POST',
@@ -314,17 +330,12 @@
                 body: JSON.stringify({ data: [logData] })
             });
 
-            // 3. Guardar Gasto (Y limpiar formulario)
-            await saveExpense(transferData.code, transferData.ref, transferData.amount, transferData.date, false, transferData.user);
+            // C. Guardar Gasto
+            document.getElementById('loadMsg').innerText = "Guardando gasto final...";
+            await saveExpense(dataToSave.code, dataToSave.ref, dataToSave.amount, dataToSave.date, false, dataToSave.user);
             
-            alert("✅ Traslado realizado exitosamente.");
-            
-            // LIMPIEZA CRÍTICA DEL FORMULARIO
-            document.getElementById('ref').value = "";
-            document.getElementById('amtDisplay').value = "";
-            document.getElementById('selCode').value = ""; // Opcional: resetear codigo
-            
-            syncData();
+            alert("✅ Operación Exitosa. Los datos están sincronizados.");
+            syncData(true); // Recarga final obligatoria
 
         } catch (e) {
             alert("Error: " + e.message);
@@ -334,9 +345,12 @@
 
     // --- GUARDAR GASTO ---
     async function saveExpense(code, ref, amount, date, hideLoader=true, explicitUser=null) {
-        if(hideLoader) document.getElementById('loader').style.display = 'flex';
+        if(hideLoader) {
+            document.getElementById('loader').style.display = 'flex';
+            document.getElementById('loadMsg').innerText = "Enviando a la nube...";
+        }
         
-        const user = explicitUser || document.getElementById('uName').value;
+        const user = explicitUser || document.getElementById('uName').value || "WebUser";
         localStorage.setItem('u', user);
 
         const rowData = {
@@ -355,48 +369,45 @@
                 body: JSON.stringify({ data: [rowData] })
             });
 
-            if (!res.ok) throw new Error("Error al guardar en Gastos");
+            if (!res.ok) throw new Error("Error al guardar");
 
-            expenses.push({ id: rowData.id, code, ref, amount, date, user });
+            // NO actualizamos el array local manualmente (expenses.push)
+            // Para ser pesimistas y seguros, recargamos de la nube.
             
             if(hideLoader) {
-                renderUI();
-                // LIMPIEZA DEL FORMULARIO AL GUARDAR DIRECTO
+                await syncData(false); // Recarga silenciosa para actualizar tabla
                 document.getElementById('ref').value = "";
                 document.getElementById('amtDisplay').value = "";
+                
                 document.getElementById('loader').style.display = 'none';
+                const btn = document.getElementById('btnSave');
+                btn.disabled = false; btn.innerText = "Validar y Guardar";
                 
-                // Restaurar botón
-                const btn = document.querySelector('button[type="submit"]');
-                if(btn) { btn.disabled = false; btn.innerText = "Validar y Guardar"; }
-                
-                alert("✅ Guardado Correctamente");
+                alert("✅ Gasto guardado y confirmado en la nube.");
             }
         } catch(e) {
-            if(hideLoader) { 
-                document.getElementById('loader').style.display = 'none';
-                const btn = document.querySelector('button[type="submit"]');
-                if(btn) { btn.disabled = false; btn.innerText = "Validar y Guardar"; }
-                alert("Error: " + e.message); 
-            } else { throw e; }
+            document.getElementById('loader').style.display = 'none';
+            const btn = document.getElementById('btnSave');
+            btn.disabled = false; btn.innerText = "Validar y Guardar";
+            if(hideLoader) alert("Error: " + e.message);
+            else throw e;
         }
     }
 
     async function delExp(id) {
-        if(!confirm("¿Borrar?")) return;
+        if(!confirm("¿Borrar de la base de datos?")) return;
         document.getElementById('loader').style.display = 'flex';
         try {
             await fetch(`${API_URL}/id/${id}?sheet=Gastos`, { method: 'DELETE' });
-            expenses = expenses.filter(x => x.id != id);
-            renderUI();
+            await syncData(false);
         } catch(e) { alert("Error: " + e.message); }
         document.getElementById('loader').style.display = 'none';
     }
 
     function renderUI() {
         const sel = document.getElementById('selCode');
-        // Guardamos selección actual si existe para no perderla al recargar (opcional)
-        // const cur = sel.value; 
+        // Guardar seleccion actual
+        const currentSelection = sel.value;
         sel.innerHTML = '<option value="">-- Seleccionar --</option>';
         
         budget.forEach(b => {
@@ -409,7 +420,8 @@
                 sel.appendChild(o);
             }
         });
-        // sel.value = cur;
+        // Restaurar seleccion si existe
+        if(currentSelection) sel.value = currentSelection;
 
         const expMap = {};
         let tSpent = 0;
@@ -470,4 +482,3 @@
 </script>
 </body>
 </html>
-
