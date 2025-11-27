@@ -78,6 +78,7 @@
         <div class="card">
             <h2>Registrar Gasto</h2>
             <form onsubmit="tryAddExpense(event)">
+                <label>Usuario</label><input type="text" id="uName" required placeholder="Tu nombre">
                 <label>Código</label><select id="selCode" required><option>Cargando...</option></select>
                 <label>Referencia</label><input type="text" id="ref" required>
                 <div style="display:flex; gap:10px">
@@ -114,6 +115,7 @@
     // ==================================================
 
     let budget = [], expenses = [];
+    // Detectar encabezados automáticamente al cargar
     let DETECTED_HEADERS = new Array(12).fill(null); 
     
     const MONTH_POSSIBILITIES = [
@@ -127,6 +129,8 @@
     let pendingExpense = null;
 
     document.addEventListener('DOMContentLoaded', () => {
+        const u = localStorage.getItem('u');
+        if(u) document.getElementById('uName').value = u;
         document.getElementById('date').valueAsDate = new Date();
         syncData();
     });
@@ -141,11 +145,17 @@
         return parseFloat(document.getElementById('amtDisplay').value.replace(/\./g, '')) || 0;
     }
 
+    // Función Segura para limpiar strings
+    function safeClean(val) {
+        return String(val || "").trim().toUpperCase();
+    }
+
+    // Auto-detector de columnas en la BD
     function detectMonthHeaders(sampleRow) {
         if(!sampleRow) return;
         const keys = Object.keys(sampleRow);
         MONTH_POSSIBILITIES.forEach((possibles, idx) => {
-            const found = keys.find(k => possibles.includes(k.trim().toUpperCase()));
+            const found = keys.find(k => possibles.includes(safeClean(k)));
             if(found) DETECTED_HEADERS[idx] = found;
         });
     }
@@ -171,12 +181,13 @@
         const code = document.getElementById('selCode').value;
         const amount = getAmountValue();
         const dateStr = document.getElementById('date').value;
-        const ref = document.getElementById('ref').value;
         const monthIdx = parseInt(dateStr.split('-')[1]) - 1;
 
-        const line = budget.find(b => (b.CODIGO||b.Codigo||b.codigo) == code);
+        // Busqueda de codigo segura
+        const line = budget.find(b => (b.CODIGO||b.Codigo||b.Code) == code);
         if (!line) return alert("Código no encontrado");
 
+        // Obtener valor del mes usando header detectado
         const header = DETECTED_HEADERS[monthIdx];
         let rawBud = header ? line[header] : "0";
         if(typeof rawBud === 'string') rawBud = rawBud.replace(/\./g,'').replace(/,/g,'.');
@@ -192,10 +203,17 @@
         const available = budgetMonth - spentMonth;
 
         if (amount > available) {
-            pendingExpense = { code, amount, date: dateStr, ref, monthIdx, missing: amount - available };
-            openModal(line, monthIdx, pendingExpense.missing);
+            const missing = amount - available;
+            // Guardamos TODO lo necesario para reintentar
+            pendingExpense = { 
+                code, amount, date: dateStr, 
+                ref: document.getElementById('ref').value,
+                user: document.getElementById('uName').value, // Guardamos usuario también
+                monthIdx, missing 
+            };
+            openModal(line, monthIdx, missing);
         } else {
-            saveExpense(code, ref, amount, dateStr);
+            saveExpense(code, document.getElementById('ref').value, amount, dateStr);
         }
     }
 
@@ -236,88 +254,89 @@
         document.getElementById('alertModal').style.display = 'none';
     }
 
-    // --- EJECUCIÓN DEL TRASLADO (CORREGIDO: JSON SIMPLE PARA PATCH) ---
+    // --- TRASLADO SEGURO ---
     async function executeTransfer() {
         if(!pendingExpense) return;
         
-        // 1. COPIA DE SEGURIDAD DE DATOS
-        const dataToSave = { ...pendingExpense };
+        const dataToSave = { ...pendingExpense }; // Copia
         const sourceIdx = document.getElementById('modalSourceMonth').value;
         
         if(isNaN(sourceIdx)) return alert("Selecciona un mes");
 
-        // 2. CERRAR MODAL
         closeModal();
-        pendingExpense = null; 
-
-        const targetIdx = dataToSave.monthIdx;
-        const amount = dataToSave.missing;
-        const code = dataToSave.code;
+        pendingExpense = null;
 
         const colSource = DETECTED_HEADERS[sourceIdx];
-        const colTarget = DETECTED_HEADERS[targetIdx];
+        const colTarget = DETECTED_HEADERS[dataToSave.monthIdx];
 
-        if(!colSource || !colTarget) return alert("Error: No se identificaron columnas en la BD.");
+        if(!colSource || !colTarget) return alert("Error: No se identificaron columnas.");
 
         document.getElementById('loader').style.display = 'flex';
 
         try {
-            const line = budget.find(b => (b.CODIGO||b.Codigo) == code);
+            const line = budget.find(b => (b.CODIGO||b.Codigo) == dataToSave.code);
             
             let valSource = parseFloat(String(line[colSource]).replace(/\./g,'').replace(/,/g,'.')) || 0;
             let valTarget = parseFloat(String(line[colTarget]).replace(/\./g,'').replace(/,/g,'.')) || 0;
 
-            // AQUÍ EL CAMBIO: NO USAMOS WRAPPER {data: ...} PARA PATCH
             const updateData = {};
-            updateData[colSource] = valSource - amount;
-            updateData[colTarget] = valTarget + amount;
+            updateData[colSource] = valSource - dataToSave.missing;
+            updateData[colTarget] = valTarget + dataToSave.missing;
 
             const codeKey = Object.keys(line).find(k => k.toUpperCase() === "CODIGO") || "CODIGO";
 
-            // PATCH SheetDB
-            const res = await fetch(`${API_URL}/${codeKey}/${encodeURIComponent(code)}?sheet=Presupuesto`, {
+            // Update Presupuesto
+            const res = await fetch(`${API_URL}/${codeKey}/${encodeURIComponent(dataToSave.code)}?sheet=Presupuesto`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(updateData) // ENVÍO DIRECTO
+                body: JSON.stringify({ data: updateData })
             });
 
             if(!res.ok) throw new Error("Error SheetDB: " + res.status);
 
-            // Guardar Gasto
-            await saveExpense(code, dataToSave.ref, dataToSave.amount, dataToSave.date, false);
+            // Guardar Gasto (Pasando el usuario guardado)
+            await saveExpense(dataToSave.code, dataToSave.ref, dataToSave.amount, dataToSave.date, false, dataToSave.user);
             
             alert("✅ Traslado realizado con éxito.");
             syncData();
 
         } catch (e) {
-            alert("Error en traslado: " + e.message);
+            alert("Error: " + e.message);
             document.getElementById('loader').style.display = 'none';
         }
     }
 
-    async function saveExpense(code, ref, amount, date, hideLoader=true) {
+    // --- GUARDAR GASTO (CORREGIDO PARA SHEETDB) ---
+    async function saveExpense(code, ref, amount, date, hideLoader=true, explicitUser=null) {
         if(hideLoader) document.getElementById('loader').style.display = 'flex';
         
-        // 3. PREPARAR DATOS GASTO (ARRAY PARA POST)
+        const user = explicitUser || document.getElementById('uName').value;
+        localStorage.setItem('u', user);
+
+        // Estructura robusta para SheetDB
         const rowData = {
             "id": Date.now(),
             "code": code, "CODIGO": code,
-            "ref": ref, "REFERENCIA": ref,
-            "amount": amount, "MONTO": amount,
-            "date": date, "FECHA": date,
-            "user": "WebUser"
+            "ref": ref, "Referencia": ref,
+            "amount": amount, "Monto": amount,
+            "date": date, "Fecha": date,
+            "user": user, "Usuario": user
         };
 
         try {
             const res = await fetch(`${API_URL}?sheet=Gastos`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data: [rowData] }) // ARRAY PARA POST
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                // SheetDB prefiere array para POST
+                body: JSON.stringify({ data: [rowData] })
             });
 
-            if (!res.ok) throw new Error("Error guardando gasto");
+            if (!res.ok) throw new Error("SheetDB rechazó el guardado");
 
-            expenses.push({ code, ref, amount, date, id: rowData.id });
+            expenses.push({ id: rowData.id, code, ref, amount, date, user });
             
             if(hideLoader) {
                 renderUI();
@@ -327,9 +346,9 @@
                 alert("✅ Guardado");
             }
         } catch(e) {
-            if(hideLoader) {
+            if(hideLoader) { 
                 document.getElementById('loader').style.display = 'none';
-                alert("Error: " + e.message);
+                alert("Error al guardar: " + e.message); 
             } else { throw e; }
         }
     }
@@ -349,8 +368,8 @@
         const sel = document.getElementById('selCode');
         sel.innerHTML = '<option value="">-- Seleccionar --</option>';
         budget.forEach(b => {
-            const code = b.CODIGO || b.Codigo || b.codigo;
-            const desc = b.DESCRIPCION || b.Descripcion || b.descripcion || "";
+            const code = b.CODIGO || b.Codigo || b.Code;
+            const desc = b.DESCRIPCION || b.Descripcion || "";
             if(code) {
                 const o = document.createElement('option');
                 o.value = code;
@@ -375,7 +394,7 @@
         let tBud = 0;
 
         budget.forEach(l => {
-            const code = l.CODIGO || l.Codigo || l.codigo;
+            const code = l.CODIGO || l.Codigo;
             if(!code) return;
             
             const tr = document.createElement('tr');
