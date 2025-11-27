@@ -78,12 +78,16 @@
         .progress-bg { width: 100%; background: #e0e0e0; height: 12px; border-radius: 6px; margin-top: 5px; overflow: hidden; }
         .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.6s ease-out; }
         .progress-fill.danger { background: var(--danger); }
+        
+        /* Subtítulos Detalle */
+        .detail-subtitle { color: var(--accent); font-size: 0.9rem; font-weight: 700; margin-top: 20px; margin-bottom: 10px; border-bottom: 2px solid #eee; padding-bottom: 5px; }
 
         /* LOADER & MODAL */
         #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 999; display: none; }
         .spinner { width: 40px; height: 40px; border: 4px solid #ecf0f1; border-top: 4px solid var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 15px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
+        /* MODAL */
         .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,43,92,0.6); display:none; justify-content:center; align-items:center; z-index:1000; backdrop-filter: blur(3px); }
         .modal { background: white; padding: 30px; border-radius: 8px; width: 90%; max-width: 450px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); border-top: 6px solid var(--danger); animation: slideDown 0.3s ease; }
         @keyframes slideDown { from {transform: translateY(-30px); opacity:0;} to {transform: translateY(0); opacity:1;} }
@@ -117,7 +121,6 @@
             document.getElementById('loginScreen').style.display = 'none';
             unlockApp();
         }
-        // Seguridad anti-pantalla blanca
         setTimeout(() => {
             if(document.getElementById('loginScreen').style.display === 'none') {
                 document.getElementById('mainContainer').style.display = 'block';
@@ -135,13 +138,12 @@
 <div id="alertModal" class="modal-overlay">
     <div class="modal">
         <h3>⚠️ Saldo Insuficiente</h3>
-        <p style="margin-bottom:5px;">El rubro no tiene fondos en <b id="modalTargetMonth" style="color:var(--primary)"></b>.</p>
-        <p>Faltante: <b id="modalMissing" style="color:var(--danger); font-size:1.2em;"></b></p>
+        <p>No tienes fondos en <b id="modalTargetMonth"></b>.</p>
+        <p>Faltan: <b id="modalMissing" style="color:var(--danger)"></b></p>
         
         <div class="transfer-box">
             <label style="color:var(--danger)">Autorizar traslado desde:</label>
             <select id="modalSourceMonth" style="background:white;"></select>
-            <small style="color:#c0392b">Se descontará del mes seleccionado.</small>
         </div>
         
         <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:25px;">
@@ -191,7 +193,7 @@
         <div class="card">
             <h2>Últimos Gastos</h2>
             <div class="table-wrap" style="max-height:380px">
-                <table id="histTable"><thead><tr><th>Fecha</th><th>Cód</th><th>Solicitante</th><th>Concepto</th><th>Monto</th><th></th></tr></thead><tbody></tbody></table>
+                <table id="histTable"><thead><tr><th>Fecha</th><th>Cód</th><th>Ref</th><th>Monto</th><th></th></tr></thead><tbody></tbody></table>
             </div>
         </div>
     </div>
@@ -201,7 +203,7 @@
         <div class="table-wrap"><table id="mainTable"><thead><tr><th>Cód</th><th>Ene</th><th>Feb</th><th>Mar</th><th>Abr</th><th>May</th><th>Jun</th><th>Jul</th><th>Ago</th><th>Sep</th><th>Oct</th><th>Nov</th><th>Dic</th><th>Total</th></tr></thead><tbody></tbody></table></div>
     </div>
 
-    <div class="grid-transfer">
+    <div class="grid">
         <div class="card transfer-zone">
             <h2>Módulo de Traslados</h2>
             <form onsubmit="handleTransfer(event)">
@@ -216,15 +218,15 @@
         </div>
         <div class="card transfer-zone">
             <h2>Bitácora Traslados</h2>
-            <div class="table-wrap" style="max-height:300px"><table id="transfersTable"><thead><tr><th>Fecha</th><th>Código</th><th>Movimiento</th><th>Valor</th><th>User</th></tr></thead><tbody></tbody></table></div>
+            <div class="table-wrap" style="max-height:300px"><table id="transfersTable"><thead><tr><th>Fecha</th><th>Cód</th><th>Movimiento</th><th>Valor</th><th>User</th></tr></thead><tbody></tbody></table></div>
         </div>
     </div>
 
     <div class="card analysis-zone" style="margin-top: 25px;">
-        <h2>🔍 Análisis Detallado</h2>
+        <h2>🔍 Análisis Detallado por Rubro</h2>
         <div style="display:flex; gap:15px; align-items:flex-end; margin-bottom:20px;">
-            <div style="flex:1;"><label>Rubro:</label><select id="detailSelectCode" onchange="renderDetailView()" style="margin-bottom:0;"></select></div>
-            <button onclick="renderDetailView()" class="primary">Ver</button>
+            <div style="flex:1;"><label>Seleccionar Rubro:</label><select id="detailSelectCode" onchange="renderDetailView()" style="margin-bottom:0; border:2px solid var(--primary);"></select></div>
+            <button onclick="renderDetailView()" class="primary">Ver Detalle</button>
         </div>
         <div id="detailPanel" style="display:none;">
             <div class="kpi-box" style="background:white; border:1px solid #eee; margin-bottom:20px;">
@@ -237,18 +239,26 @@
                 <div class="progress-bg"><div class="progress-fill" id="dProgress"></div></div>
                 <div style="text-align:right; font-weight:bold; color:var(--primary)" id="dPercText">0%</div>
             </div>
+            
+            <div class="detail-subtitle">📉 Gastos Ejecutados</div>
             <div class="table-wrap" style="max-height:250px;">
                 <table id="detailTable"><thead><tr><th>Fecha</th><th>Ref</th><th>Solicitante</th><th>Monto</th></tr></thead><tbody></tbody></table>
+            </div>
+
+            <div class="detail-subtitle" style="margin-top:20px;">🔄 Historial de Traslados Asociados</div>
+            <div class="table-wrap" style="max-height:200px;">
+                <table id="detailTransfersTable">
+                    <thead><tr><th>Fecha</th><th>Movimiento</th><th>Valor</th><th>Usuario</th></tr></thead>
+                    <tbody></tbody>
+                </table>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-    // ==================================================
-    // ⚠️ PEGA TU URL DE SHEETDB AQUÍ ⚠️
+    // ⚠️ TU URL DE SHEETDB ⚠️
     const API_URL = "https://sheetdb.io/api/v1/sw4ed7qqbxl4k";
-    // ==================================================
 
     let budget = [], expenses = [], transfers = [];
     let DETECTED_HEADERS = new Array(12).fill(null); 
@@ -258,6 +268,7 @@
     let pendingExpense = null;
 
     function unlockApp() {
+        document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('mainContainer').style.display = 'block';
         const u = localStorage.getItem('u');
         if(u && (u==="JIAT"||u==="MBR")) document.getElementById('uName').value = u;
@@ -330,6 +341,7 @@
         bar.className = perc > 90 ? "progress-fill danger" : "progress-fill";
         document.getElementById('dPercText').innerText = perc.toFixed(1) + "%";
 
+        // Tabla Gastos Detalle
         const tbody = document.querySelector('#detailTable tbody');
         tbody.innerHTML = '';
         if(specificExpenses.length === 0) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#999">Sin gastos</td></tr>';
@@ -337,13 +349,23 @@
             specificExpenses.sort((a,b) => new Date(getSmartValue(b,["date"])) - new Date(getSmartValue(a,["date"])));
             specificExpenses.forEach(x => {
                 const r = document.createElement('tr');
-                r.innerHTML = `
-                    <td>${getSmartValue(x,["date","Date","Fecha"])}</td>
-                    <td>${getSmartValue(x,["ref","Ref","Referencia"])}</td>
-                    <td>${getSmartValue(x,["user","User","Usuario"])||"JIAT"}</td>
-                    <td class="money">${fmt(getSmartValue(x,["amount","Amount","Monto"]))}</td>
-                `;
+                r.innerHTML = `<td>${getSmartValue(x,["date"])}</td><td>${getSmartValue(x,["ref"])}</td><td>${getSmartValue(x,["user"])||"JIAT"}</td><td class="money">${fmt(getSmartValue(x,["amount"]))}</td>`;
                 tbody.appendChild(r);
+            });
+        }
+
+        // Tabla Traslados Detalle (NUEVO)
+        const specificTransfers = transfers.filter(t => getSmartValue(t, ["Codigo","CODIGO"]) == code);
+        const tbodyT = document.querySelector('#detailTransfersTable tbody');
+        tbodyT.innerHTML = '';
+        if(specificTransfers.length === 0) tbodyT.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#999">Sin traslados</td></tr>';
+        else {
+            specificTransfers.reverse().forEach(t => {
+                const r = document.createElement('tr');
+                const ori = getSmartValue(t, ["Origen","ORIGEN"]);
+                const dest = getSmartValue(t, ["Destino","DESTINO"]);
+                r.innerHTML = `<td>${getSmartValue(t,["Fecha"])}</td><td><span class="badge-transfer">${ori} ➔ ${dest}</span></td><td style="font-weight:bold">${fmt(getSmartValue(t,["Valor"]))}</td><td>${getSmartValue(t,["Usuario"])}</td>`;
+                tbodyT.appendChild(r);
             });
         }
     }
@@ -496,25 +518,11 @@
         document.getElementById('loader').style.display = 'flex';
         const user = document.getElementById('uName').value;
         localStorage.setItem('u', user);
-
-        // Payload robusto con múltiples llaves para asegurar que SheetDB encuentre la columna
-        const data = { 
-            "id": Date.now(), 
-            "code": code, "CODIGO": code, "Codigo": code,
-            "ref": ref, "REFERENCIA": ref, "Referencia": ref,
-            "amount": amount, "MONTO": amount, "Monto": amount,
-            "date": date, "FECHA": date, "Fecha": date,
-            "user": user, "USUARIO": user, "Usuario": user
-        };
+        const data = { "id": Date.now(), "code": code, "CODIGO": code, "ref": ref, "REFERENCIA": ref, "amount": amount, "MONTO": amount, "date": date, "FECHA": date, "user": user, "USUARIO": user };
         
         try {
             const res = await fetch(`${API_URL}?sheet=Gastos`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({data: [data]}) });
-            
-            // Manejo de error detallado
-            if(!res.ok) {
-                const errText = await res.text();
-                throw new Error(`Error SheetDB (${res.status}): ${errText}`);
-            }
+            if(!res.ok) throw new Error("Error Save");
             
             await syncData(false);
             document.getElementById('ref').value = ""; document.getElementById('amtDisplay').value = "";
@@ -593,11 +601,11 @@
         th.innerHTML = '';
         [...expenses].sort((a,b)=>getSmartValue(b,["id"])-getSmartValue(a,["id"])).forEach(x => {
             const r = document.createElement('tr');
-            const d = getSmartValue(x, ["date","Date","Fecha"]);
+            const d = getSmartValue(x, ["date","Date"]);
             const u = getSmartValue(x, ["user","User","Usuario"])||"JIAT";
             const rf = getSmartValue(x, ["ref","Ref"]);
-            const cd = getSmartValue(x, ["code","Code","CODIGO"]);
-            const am = getSmartValue(x, ["amount","Amount","Monto"]);
+            const cd = getSmartValue(x, ["code","Code"]);
+            const am = getSmartValue(x, ["amount","Amount"]);
             const id = getSmartValue(x, ["id","ID"]);
             r.innerHTML = `<td>${d}</td><td>${cd}</td><td>${u}</td><td>${rf}</td><td class="money">${fmt(am)}</td><td style="text-align:right"><button class="danger" onclick="delExp(${id})">×</button></td>`;
             th.appendChild(r);
@@ -609,13 +617,7 @@
         else {
             [...transfers].reverse().slice(0,10).forEach(t => {
                 const r = document.createElement('tr');
-                const date = getSmartValue(t, ["Fecha","FECHA"]);
-                const cod = getSmartValue(t, ["Codigo","CODIGO"]);
-                const ori = getSmartValue(t, ["Origen","ORIGEN"]);
-                const dest = getSmartValue(t, ["Destino","DESTINO"]);
-                const val = getSmartValue(t, ["Valor","VALOR"]);
-                const usr = getSmartValue(t, ["Usuario","USUARIO"]) || "-";
-                r.innerHTML = `<td>${date}</td><td>${cod}</td><td><span class="badge-transfer">${ori} ➔ ${dest}</span></td><td style="font-weight:bold">${fmt(val)}</td><td>${usr}</td>`;
+                r.innerHTML = `<td>${getSmartValue(t, ["Fecha"])}</td><td>${getSmartValue(t, ["Codigo"])}</td><td><span class="badge-transfer">${getSmartValue(t, ["Origen"])} ➔ ${getSmartValue(t, ["Destino"])}</span></td><td style="font-weight:bold">${fmt(getSmartValue(t, ["Valor"]))}</td><td>${getSmartValue(t, ["Usuario"])}</td>`;
                 tt.appendChild(r);
             });
         }
@@ -631,8 +633,8 @@
                 let b = parseFloat(typeof raw==='string'?raw.replace(/\./g,'').replace(/,/g,'.'):raw)||0;
                 let s = 0;
                 expenses.forEach(x => {
-                    if(getSmartValue(x,["code","Code","CODIGO"])==c && (parseInt(getSmartValue(x,["date","Date","Fecha"]).split('-')[1])-1)==i)
-                        s += parseFloat(getSmartValue(x,["amount","Amount","Monto"]));
+                    if(getSmartValue(x,["code","Code"])==c && (parseInt(getSmartValue(x,["date","Date"]).split('-')[1])-1)==i)
+                        s += parseFloat(getSmartValue(x,["amount","Amount"]));
                 });
                 r.push(b-s); tot += (b-s);
             }
