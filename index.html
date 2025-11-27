@@ -7,13 +7,14 @@
     <style>
         /* === IDENTIDAD VISUAL SAINT AUBIN === */
         :root {
-            --primary: #002B5C;       /* Azul Oscuro Corporativo */
-            --accent: #00A3E0;        /* Azul Celeste Brillante */
-            --bg: #F4F7FA;            /* Fondo Gris Azulado muy claro */
+            --primary: #002B5C;       /* Azul Oscuro */
+            --accent: #00A3E0;        /* Azul Celeste */
+            --bg: #F4F7FA;            /* Fondo */
             --white: #ffffff;
             --text: #2C3E50;
             --danger: #D32F2F;
             --success: #2E7D32;
+            --warning: #F39C12;
         }
         
         body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); padding: 20px; color: var(--text); font-size:14px; }
@@ -41,6 +42,7 @@
         button { padding: 12px 25px; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; text-transform: uppercase; font-size: 0.85em; transition: 0.2s; letter-spacing: 0.5px; }
         button.primary { background: var(--primary); color: white; }
         button.accent { background: var(--accent); color: white; width: 100%; font-size: 1em; }
+        button.warning { background: var(--warning); color: white; width: 100%; }
         button.danger { background: var(--danger); color: white; padding: 4px 8px; font-size: 0.75em; border-radius: 3px; }
         button:hover { opacity: 0.9; transform: translateY(-1px); }
         button:disabled { background: #bdc3c7; cursor: not-allowed; transform: none; }
@@ -58,18 +60,12 @@
         tr:hover { background-color: #f9fcff; }
         
         /* Badges */
-        .badge-transfer { background: #e3f2fd; color: #1565c0; padding: 4px 8px; border-radius: 12px; font-weight: bold; font-size: 0.85em; border: 1px solid #bbdefb; }
+        .badge-transfer { background: #fff3e0; color: #e67e22; padding: 4px 8px; border-radius: 12px; font-weight: bold; font-size: 0.85em; border: 1px solid #ffe0b2; }
 
-        /* LOADER & MODAL */
+        /* LOADER */
         #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 999; display: none; }
         .spinner { width: 40px; height: 40px; border: 4px solid #ecf0f1; border-top: 4px solid var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 15px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-        .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,43,92,0.6); display:none; justify-content:center; align-items:center; z-index:1000; backdrop-filter: blur(3px); }
-        .modal { background: white; padding: 30px; border-radius: 8px; width: 90%; max-width: 450px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); border-top: 6px solid var(--danger); animation: slideDown 0.3s ease; }
-        @keyframes slideDown { from {transform: translateY(-30px); opacity:0;} to {transform: translateY(0); opacity:1;} }
-        
-        .transfer-box { background: #fff5f5; padding: 15px; border-radius: 5px; border: 1px solid #fed7d7; margin-top: 15px; }
     </style>
 </head>
 <body>
@@ -108,25 +104,6 @@
     <p id="loadMsg" style="color:#7f8c8d">Conectando con base de datos segura...</p>
 </div>
 
-<div id="alertModal" class="modal-overlay">
-    <div class="modal">
-        <h3>⚠️ Presupuesto Insuficiente</h3>
-        <p style="margin-bottom:5px;">El rubro no tiene fondos en <b id="modalTargetMonth" style="color:var(--primary)"></b>.</p>
-        <p>Faltante: <b id="modalMissing" style="color:var(--danger); font-size:1.2em;"></b></p>
-        
-        <div class="transfer-box">
-            <label style="color:var(--danger)">Autorizar traslado desde:</label>
-            <select id="modalSourceMonth" style="background:white;"></select>
-            <small style="color:#c0392b">Se descontará del mes seleccionado.</small>
-        </div>
-        
-        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:25px;">
-            <button onclick="closeModal()" style="background:#ecf0f1; color:#7f8c8d">Cancelar</button>
-            <button onclick="executeTransfer()" class="accent" style="background:var(--success)">✅ Autorizar y Guardar</button>
-        </div>
-    </div>
-</div>
-
 <div class="container" id="mainContainer" style="display:none;">
     <div class="header">
         <div class="brand">
@@ -145,44 +122,82 @@
     </div>
 
     <div class="grid">
-        <div class="card">
-            <h2>Registrar Nuevo Gasto</h2>
-            <form onsubmit="tryAddExpense(event)">
-                <div style="margin-bottom:5px;">
-                    <label>Solicitante</label>
-                    <select id="uName" required>
-                        <option value="JIAT" selected>JIAT</option>
-                        <option value="MBR">MBR</option>
-                    </select>
-                </div>
-                
-                <label>Rubro Presupuestal</label>
-                <select id="selCode" required><option>Cargando códigos...</option></select>
-                
-                <label>Concepto / Referencia</label>
-                <input type="text" id="ref" placeholder="Ej: Factura 123" required>
-                
-                <div style="display:flex; gap:15px;">
-                    <div style="flex:1">
-                        <label>Monto ($)</label>
-                        <input type="text" id="amtDisplay" placeholder="0" required oninput="formatCurrencyInput(this)" style="font-weight:bold; color:var(--primary);">
+        <div>
+            <div class="card">
+                <h2>1. Registrar Gasto</h2>
+                <form onsubmit="tryAddExpense(event)">
+                    <div style="margin-bottom:5px;">
+                        <label>Solicitante</label>
+                        <select id="uName" required>
+                            <option value="JIAT" selected>JIAT</option>
+                            <option value="MBR">MBR</option>
+                        </select>
                     </div>
-                    <div style="flex:1">
-                        <label>Fecha</label>
-                        <input type="date" id="date" required>
+                    
+                    <label>Rubro Presupuestal</label>
+                    <select id="selCode" required><option>Cargando códigos...</option></select>
+                    
+                    <label>Concepto / Referencia</label>
+                    <input type="text" id="ref" placeholder="Ej: Factura 123" required>
+                    
+                    <div style="display:flex; gap:15px;">
+                        <div style="flex:1">
+                            <label>Monto ($)</label>
+                            <input type="text" id="amtDisplay" placeholder="0" required oninput="formatCurrencyInput(this)" style="font-weight:bold; color:var(--primary);">
+                        </div>
+                        <div style="flex:1">
+                            <label>Fecha</label>
+                            <input type="date" id="date" required>
+                        </div>
                     </div>
-                </div>
-                <button type="submit" id="btnSave" class="accent">Validar Disponibilidad</button>
-            </form>
+                    <button type="submit" id="btnSave" class="accent">Registrar Gasto</button>
+                </form>
+            </div>
+
+            <div class="card" style="border-top: 4px solid var(--warning);">
+                <h2 style="color:var(--warning)">2. Módulo de Traslados</h2>
+                <form onsubmit="handleTransfer(event)">
+                    <label>Rubro a Modificar</label>
+                    <select id="selCodeTransfer" required><option>Cargando...</option></select>
+
+                    <div style="display:flex; gap:10px;">
+                        <div style="flex:1">
+                            <label>De (Origen)</label>
+                            <select id="monthSource" required></select>
+                        </div>
+                        <div style="flex:1">
+                            <label>Para (Destino)</label>
+                            <select id="monthTarget" required></select>
+                        </div>
+                    </div>
+
+                    <label>Valor a Trasladar</label>
+                    <input type="text" id="amtTransfer" placeholder="$ 0" required oninput="formatCurrencyInput(this)" style="color:var(--warning); font-weight:bold;">
+
+                    <button type="submit" class="warning">Autorizar Traslado</button>
+                </form>
+            </div>
         </div>
 
-        <div class="card">
-            <h2>Últimos Gastos Registrados</h2>
-            <div class="table-wrap" style="max-height:380px">
-                <table id="histTable">
-                    <thead><tr><th>Fecha</th><th>Cód</th><th>Solicitante</th><th>Concepto</th><th>Monto</th><th></th></tr></thead>
-                    <tbody></tbody>
-                </table>
+        <div>
+            <div class="card">
+                <h2>Últimos Gastos Registrados</h2>
+                <div class="table-wrap" style="max-height:300px">
+                    <table id="histTable">
+                        <thead><tr><th>Fecha</th><th>Cód</th><th>Solicitante</th><th>Concepto</th><th>Monto</th><th></th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Historial de Traslados</h2>
+                <div class="table-wrap" style="max-height:200px">
+                    <table id="transfersTable">
+                        <thead><tr><th>Fecha</th><th>Código</th><th>Movimiento</th><th>Valor</th><th>Autorizó</th></tr></thead>
+                        <tbody><tr><td colspan="5" style="text-align:center; color:#999;">Cargando...</td></tr></tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
@@ -193,16 +208,6 @@
             <table id="mainTable">
                 <thead><tr><th>Cód</th><th>Ene</th><th>Feb</th><th>Mar</th><th>Abr</th><th>May</th><th>Jun</th><th>Jul</th><th>Ago</th><th>Sep</th><th>Oct</th><th>Nov</th><th>Dic</th><th>Total</th></tr></thead>
                 <tbody></tbody>
-            </table>
-        </div>
-    </div>
-
-    <div class="card">
-        <h2>🔄 Bitácora de Traslados (Historial)</h2>
-        <div class="table-wrap" style="max-height:250px">
-            <table id="transfersTable">
-                <thead><tr><th>Fecha</th><th>Código</th><th>Movimiento</th><th>Valor</th><th>Usuario</th></tr></thead>
-                <tbody><tr><td colspan="5" style="text-align:center; color:#999;">Cargando historial...</td></tr></tbody>
             </table>
         </div>
     </div>
@@ -224,7 +229,6 @@
         ["OCTUBRE","Octubre","OCT","October"], ["NOVIEMBRE","Noviembre","NOV","November"], ["DICIEMBRE","Diciembre","DIC","December"]
     ];
     const MONTH_LABELS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-    let pendingExpense = null;
 
     function unlockApp() {
         document.getElementById('loginScreen').style.display = 'none';
@@ -235,11 +239,26 @@
              if (u === "JIAT" || u === "MBR") uSelect.value = u;
         }
         document.getElementById('date').valueAsDate = new Date();
+        populateMonthSelects();
         syncData(true);
     }
 
     if(localStorage.getItem('auth') === 'true') {
         document.addEventListener('DOMContentLoaded', unlockApp);
+    }
+
+    function populateMonthSelects() {
+        const s1 = document.getElementById('monthSource');
+        const s2 = document.getElementById('monthTarget');
+        s1.innerHTML = '<option value="">Sel. Mes</option>';
+        s2.innerHTML = '<option value="">Sel. Mes</option>';
+        
+        MONTH_LABELS.forEach((m, i) => {
+            const op1 = document.createElement('option'); op1.value = i; op1.text = m;
+            const op2 = document.createElement('option'); op2.value = i; op2.text = m;
+            s1.appendChild(op1);
+            s2.appendChild(op2);
+        });
     }
 
     // --- UTILIDADES ---
@@ -248,8 +267,9 @@
         if (val === "") { input.value = ""; return; }
         input.value = new Intl.NumberFormat('es-CO').format(parseInt(val));
     }
-    function getAmountValue() {
-        return parseFloat(document.getElementById('amtDisplay').value.replace(/\./g, '')) || 0;
+    function getAmountValue(id) {
+        const el = document.getElementById(id);
+        return parseFloat(el.value.replace(/\./g, '')) || 0;
     }
     function getSmartValue(obj, keys) {
         if(!obj) return undefined;
@@ -299,10 +319,7 @@
                 success = true;
             } catch (e) {
                 console.warn("Intento fallido:", e);
-                if(attempts === 1) {
-                    if(showLoaderUI) document.getElementById('loadMsg').innerText = "Iniciando servicios (Reintentando)...";
-                    await new Promise(r => setTimeout(r, 1500)); 
-                }
+                if(attempts === 1) await new Promise(r => setTimeout(r, 1500)); 
             }
         }
         
@@ -310,7 +327,7 @@
         if(showLoaderUI) document.getElementById('loader').style.display = 'none';
     }
 
-    // --- VALIDACIÓN ---
+    // --- REGISTRAR GASTO ---
     async function tryAddExpense(e) {
         e.preventDefault();
         const btn = document.getElementById('btnSave');
@@ -319,7 +336,7 @@
         await syncData(false); 
 
         const code = document.getElementById('selCode').value;
-        const amount = getAmountValue();
+        const amount = getAmountValue('amtDisplay');
         const dateStr = document.getElementById('date').value;
         const ref = document.getElementById('ref').value;
         const monthIdx = parseInt(dateStr.split('-')[1]) - 1;
@@ -328,7 +345,7 @@
         
         if (!line) {
             alert("Código no encontrado");
-            btn.disabled = false; btn.innerText = "Validar Disponibilidad";
+            btn.disabled = false; btn.innerText = "Registrar Gasto";
             return;
         }
 
@@ -348,100 +365,92 @@
             }
         });
 
+        // VALIDACIÓN ESTRICTA
         if (amount > (budgetMonth - spentMonth)) {
             const missing = amount - (budgetMonth - spentMonth);
-            pendingExpense = { 
-                code, amount, date: dateStr, ref, monthIdx, missing,
-                user: document.getElementById('uName').value
-            };
-            openModal(line, monthIdx, pendingExpense.missing);
-            btn.disabled = false; btn.innerText = "Validar Disponibilidad";
+            alert(`⛔ SALDO INSUFICIENTE\n\nRubro: ${code}\nMes: ${MONTH_LABELS[monthIdx]}\nFaltan: ${fmt(missing)}\n\nPor favor realiza un traslado en el Módulo de Traslados antes de registrar el gasto.`);
+            btn.disabled = false; btn.innerText = "Registrar Gasto";
         } else {
             saveExpense(code, ref, amount, dateStr);
         }
     }
 
-    function openModal(line, targetIdx, missing) {
-        const select = document.getElementById('modalSourceMonth');
-        document.getElementById('modalTargetMonth').innerText = MONTH_LABELS[targetIdx];
-        document.getElementById('modalMissing').innerText = fmt(missing);
-        select.innerHTML = '';
-        
-        DETECTED_HEADERS.forEach((header, idx) => {
-            if (idx === targetIdx || !header) return;
-            let rawBud = line[header] || "0";
-            if(typeof rawBud === 'string') rawBud = rawBud.replace(/\./g,'').replace(/,/g,'.');
-            const bud = parseFloat(rawBud) || 0;
-            
-            let spent = 0;
-            const codeVal = getSmartValue(line, ["CODIGO"]);
-            expenses.forEach(x => {
-                const xCode = getSmartValue(x, ["code", "Code", "Codigo", "CODIGO"]);
-                const xDate = getSmartValue(x, ["date", "Date", "Fecha", "FECHA"]);
-                const xAmt = parseFloat(getSmartValue(x, ["amount", "Amount", "Monto", "MONTO"])) || 0;
-                if (xCode == codeVal && xDate && (parseInt(xDate.split('-')[1])-1) == idx) {
-                    spent += xAmt;
-                }
-            });
+    // --- GESTIÓN DE TRASLADOS (NUEVA LÓGICA) ---
+    async function handleTransfer(e) {
+        e.preventDefault();
+        const code = document.getElementById('selCodeTransfer').value;
+        const sourceIdx = parseInt(document.getElementById('monthSource').value);
+        const targetIdx = parseInt(document.getElementById('monthTarget').value);
+        const amount = getAmountValue('amtTransfer');
+        const user = document.getElementById('uName').value; // Usar el mismo usuario
 
-            if ((bud - spent) >= missing) {
-                const opt = document.createElement('option');
-                opt.value = idx;
-                opt.text = `${MONTH_LABELS[idx]} (Disp: ${fmt(bud-spent)})`;
-                select.appendChild(opt);
+        if(isNaN(sourceIdx) || isNaN(targetIdx)) return alert("Selecciona meses válidos");
+        if(sourceIdx === targetIdx) return alert("El mes origen y destino deben ser diferentes");
+        if(amount <= 0) return alert("Ingresa un monto válido");
+
+        document.getElementById('loader').style.display = 'flex';
+        document.getElementById('loadMsg').innerText = "Verificando fondos...";
+
+        // 1. Verificar si hay fondos en el origen
+        await syncData(false);
+        const line = budget.find(b => getSmartValue(b, ["CODIGO","Codigo","Code"]) == code);
+        
+        const colSource = DETECTED_HEADERS[sourceIdx];
+        const colTarget = DETECTED_HEADERS[targetIdx];
+
+        if(!colSource || !colTarget) {
+            document.getElementById('loader').style.display = 'none';
+            return alert("Error al identificar columnas en la BD");
+        }
+
+        // Calcular Disponible en Origen
+        let rawBud = line[colSource] || "0";
+        if(typeof rawBud === 'string') rawBud = rawBud.replace(/\./g,'').replace(/,/g,'.');
+        const budgetSource = parseFloat(rawBud) || 0;
+
+        let spentSource = 0;
+        expenses.forEach(x => {
+            const xCode = getSmartValue(x, ["code", "Code", "Codigo", "CODIGO"]);
+            const xDate = getSmartValue(x, ["date", "Date", "Fecha", "FECHA"]);
+            const xAmt = parseFloat(getSmartValue(x, ["amount", "Amount", "Monto", "MONTO"])) || 0;
+            if (xCode == code && xDate && (parseInt(xDate.split('-')[1])-1) == sourceIdx) {
+                spentSource += xAmt;
             }
         });
 
-        if (select.options.length === 0) select.innerHTML = '<option>⛔ Sin fondos</option>';
-        document.getElementById('alertModal').style.display = 'flex';
-    }
+        if (amount > (budgetSource - spentSource)) {
+            document.getElementById('loader').style.display = 'none';
+            return alert(`⛔ Fondos insuficientes en el mes de origen (${MONTH_LABELS[sourceIdx]}).\nDisponible: ${fmt(budgetSource - spentSource)}`);
+        }
 
-    function closeModal() {
-        document.getElementById('alertModal').style.display = 'none';
-        pendingExpense = null;
-    }
-
-    // --- EJECUCIÓN DEL TRASLADO ---
-    async function executeTransfer() {
-        if(!pendingExpense) return;
-        
-        const transferData = { ...pendingExpense };
-        const sourceIdx = document.getElementById('modalSourceMonth').value;
-        
-        if(isNaN(sourceIdx)) return alert("Selecciona un mes origen");
-
-        closeModal();
-        pendingExpense = null;
-
-        const colSource = DETECTED_HEADERS[sourceIdx];
-        const colTarget = DETECTED_HEADERS[transferData.monthIdx];
-
-        document.getElementById('loader').style.display = 'flex';
-        document.getElementById('loadMsg').innerText = "Registrando traslado...";
-
+        // 2. EJECUTAR TRASLADO
         try {
-            const line = budget.find(b => getSmartValue(b, ["CODIGO"]) == transferData.code);
+            document.getElementById('loadMsg').innerText = "Aplicando traslado...";
+            
             let valSource = parseFloat(String(line[colSource]).replace(/\./g,'').replace(/,/g,'.')) || 0;
             let valTarget = parseFloat(String(line[colTarget]).replace(/\./g,'').replace(/,/g,'.')) || 0;
 
             const updateData = {};
-            updateData[colSource] = valSource - transferData.missing;
-            updateData[colTarget] = valTarget + transferData.missing;
+            updateData[colSource] = valSource - amount;
+            updateData[colTarget] = valTarget + amount;
+
             const codeKey = Object.keys(line).find(k => k.toUpperCase() === "CODIGO") || "CODIGO";
 
-            await fetch(`${API_URL}/${codeKey}/${encodeURIComponent(transferData.code)}?sheet=Presupuesto`, {
+            // Update Presupuesto
+            await fetch(`${API_URL}/${codeKey}/${encodeURIComponent(code)}?sheet=Presupuesto`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ data: updateData })
             });
 
+            // Registrar en Bitácora
             const logData = {
                 "Fecha": new Date().toISOString().split('T')[0],
-                "Codigo": transferData.code,
+                "Codigo": code,
                 "Origen": colSource,
                 "Destino": colTarget,
-                "Valor": transferData.missing,
-                "Usuario": transferData.user
+                "Valor": amount,
+                "Usuario": user
             };
             await fetch(`${API_URL}?sheet=Traslados`, {
                 method: 'POST',
@@ -449,14 +458,13 @@
                 body: JSON.stringify({ data: [logData] })
             });
 
-            document.getElementById('loadMsg').innerText = "Guardando gasto final...";
-            await saveExpense(transferData.code, transferData.ref, transferData.amount, transferData.date, false, transferData.user);
+            alert("✅ Traslado Exitoso.");
             
-            // CORRECCIÓN DOBLE GASTO: Limpiar formulario manualmente tras traslado
-            document.getElementById('ref').value = "";
-            document.getElementById('amtDisplay').value = "";
+            // Limpiar formulario traslado
+            document.getElementById('monthSource').value = "";
+            document.getElementById('monthTarget').value = "";
+            document.getElementById('amtTransfer').value = "";
             
-            alert("✅ Traslado realizado correctamente.");
             syncData(true);
 
         } catch (e) {
@@ -465,11 +473,11 @@
         }
     }
 
-    // --- GUARDAR GASTO ---
-    async function saveExpense(code, ref, amount, date, hideLoader=true, explicitUser=null) {
-        if(hideLoader) document.getElementById('loader').style.display = 'flex';
+    async function saveExpense(code, ref, amount, date) {
+        document.getElementById('loader').style.display = 'flex';
+        document.getElementById('loadMsg').innerText = "Guardando gasto...";
         
-        const user = explicitUser || document.getElementById('uName').value || "WebUser";
+        const user = document.getElementById('uName').value;
         localStorage.setItem('u', user);
 
         const rowData = {
@@ -488,23 +496,24 @@
                 body: JSON.stringify({ data: [rowData] })
             });
 
-            if (!res.ok) throw new Error("Error al guardar en Gastos");
+            if (!res.ok) throw new Error("Error al guardar");
 
-            if(hideLoader) {
-                await syncData(false); 
-                document.getElementById('ref').value = "";
-                document.getElementById('amtDisplay').value = "";
-                document.getElementById('loader').style.display = 'none';
-                
-                const btn = document.getElementById('btnSave');
-                btn.disabled = false; btn.innerText = "Validar Disponibilidad";
-                alert("✅ Gasto registrado.");
-            }
+            await syncData(false);
+            
+            // Limpieza
+            document.getElementById('ref').value = "";
+            document.getElementById('amtDisplay').value = "";
+            
+            document.getElementById('loader').style.display = 'none';
+            const btn = document.getElementById('btnSave');
+            btn.disabled = false; btn.innerText = "Registrar Gasto";
+            alert("✅ Gasto registrado correctamente.");
+
         } catch(e) {
             document.getElementById('loader').style.display = 'none';
             const btn = document.getElementById('btnSave');
-            btn.disabled = false; btn.innerText = "Validar Disponibilidad";
-            if(hideLoader) alert("Error: " + e.message); else throw e;
+            btn.disabled = false; btn.innerText = "Registrar Gasto";
+            alert("Error: " + e.message);
         }
     }
 
@@ -519,22 +528,30 @@
     }
 
     function renderUI() {
-        const sel = document.getElementById('selCode');
-        const cur = sel.value;
-        sel.innerHTML = '<option value="">-- Seleccionar Rubro --</option>';
+        const sel1 = document.getElementById('selCode');
+        const sel2 = document.getElementById('selCodeTransfer');
+        
+        // Guardar selecciones
+        const c1 = sel1.value; const c2 = sel2.value;
+        
+        const opts = '<option value="">-- Seleccionar Rubro --</option>';
+        sel1.innerHTML = opts; sel2.innerHTML = opts;
         
         budget.forEach(b => {
             const code = getSmartValue(b, ["CODIGO","Codigo"]);
             const desc = getSmartValue(b, ["DESCRIPCION","Descripcion"]) || "";
             if(code) {
-                const o = document.createElement('option');
-                o.value = code;
-                o.text = `${code} - ${desc.substring(0,30)}`;
-                sel.appendChild(o);
+                const txt = `${code} - ${desc.substring(0,35)}`;
+                const o1 = document.createElement('option'); o1.value = code; o1.text = txt;
+                const o2 = document.createElement('option'); o2.value = code; o2.text = txt;
+                sel1.appendChild(o1);
+                sel2.appendChild(o2);
             }
         });
-        if(cur) sel.value = cur;
+        if(c1) sel1.value = c1;
+        if(c2) sel2.value = c2;
 
+        // MAPA GASTOS
         const expMap = {};
         let tSpent = 0;
         expenses.forEach(x => {
@@ -548,6 +565,7 @@
             tSpent += val;
         });
 
+        // MATRIZ
         const tb = document.querySelector('#mainTable tbody');
         tb.innerHTML = '';
         let tBud = 0;
@@ -583,20 +601,22 @@
         document.getElementById('kAvail').innerText = fmt(tBud-tSpent);
         document.getElementById('kPerc').innerText = tBud>0 ? ((tSpent/tBud)*100).toFixed(1)+"%" : "0%";
 
+        // HISTORIAL GASTOS
         const th = document.querySelector('#histTable tbody');
         th.innerHTML = '';
         [...expenses].sort((a,b)=>getSmartValue(b,["id"])-getSmartValue(a,["id"])).slice(0,10).forEach(x => {
             const r = document.createElement('tr');
-            const d = getSmartValue(x, ["date","Date","Fecha","FECHA"]);
-            const u = getSmartValue(x, ["user","User","Usuario","USUARIO"]) || "-";
+            const d = getSmartValue(x, ["date","Date","Fecha"]);
+            const u = getSmartValue(x, ["user","User","Usuario"]) || "-";
             const rf = getSmartValue(x, ["ref","Ref","Referencia"]);
-            const cod = getSmartValue(x, ["code","Code","CODIGO"]); // Agregado CODIGO
+            const cod = getSmartValue(x, ["code","Code","CODIGO"]); 
             const am = getSmartValue(x, ["amount","Amount","Monto"]);
             const id = getSmartValue(x, ["id","ID"]);
-            r.innerHTML = `<td>${d}</td><td>${cod}</td><td>${u}</td><td>${rf}</td><td class="money">${fmt(am)}</td><td style="text-align:right"><button class="danger" onclick="delExp(${id})">×</button></td>`;
+            r.innerHTML = `<td>${d}</td><td>${cod}</td><td>${u}</td><td>${rf}</td><td style="font-weight:bold">${fmt(am)}</td><td style="text-align:right"><button class="danger" onclick="delExp(${id})">×</button></td>`;
             th.appendChild(r);
         });
 
+        // BITACORA TRASLADOS
         const tt = document.querySelector('#transfersTable tbody');
         tt.innerHTML = '';
         if(!transfers || transfers.length === 0) {
