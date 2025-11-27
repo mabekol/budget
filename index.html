@@ -57,6 +57,9 @@
         td { padding: 10px; border-bottom: 1px solid #f0f4f8; color: #34495e; }
         tr:hover { background-color: #f9fcff; }
         
+        /* Badges */
+        .badge-transfer { background: #e3f2fd; color: #1565c0; padding: 4px 8px; border-radius: 12px; font-weight: bold; font-size: 0.85em; border: 1px solid #bbdefb; }
+
         /* LOADER & MODAL */
         #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 999; display: none; }
         .spinner { width: 40px; height: 40px; border: 4px solid #ecf0f1; border-top: 4px solid var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 15px; }
@@ -85,7 +88,7 @@
         if(p === "SaintAubin2025") {
             document.getElementById('loginScreen').style.display = 'none';
             localStorage.setItem('auth', 'true');
-            unlockApp(); // Cargar datos al entrar
+            unlockApp(); 
         } else {
             document.getElementById('loginMsg').style.display = 'block';
         }
@@ -94,7 +97,6 @@
         localStorage.removeItem('auth');
         location.reload();
     }
-    // Verificar si ya está logueado al cargar
     if(localStorage.getItem('auth') === 'true') {
         document.getElementById('loginScreen').style.display = 'none';
     }
@@ -158,7 +160,7 @@
                 <select id="selCode" required><option>Cargando códigos...</option></select>
                 
                 <label>Concepto / Referencia</label>
-                <input type="text" id="ref" placeholder="Ej: Factura 123 - Compra Insumos" required>
+                <input type="text" id="ref" placeholder="Ej: Factura 123" required>
                 
                 <div style="display:flex; gap:15px;">
                     <div style="flex:1">
@@ -186,21 +188,21 @@
     </div>
 
     <div class="card">
-        <h2>🔄 Bitácora de Traslados (Historial)</h2>
-        <div class="table-wrap" style="max-height:250px">
-            <table id="transfersTable">
-                <thead><tr><th>Fecha</th><th>Código</th><th>Movimiento</th><th>Valor</th><th>Usuario</th></tr></thead>
-                <tbody><tr><td colspan="5" style="text-align:center; color:#999;">Cargando historial...</td></tr></tbody>
-            </table>
-        </div>
-    </div>
-
-    <div class="card">
         <h2>Ejecución Presupuestal Mensual</h2>
         <div class="table-wrap">
             <table id="mainTable">
                 <thead><tr><th>Cód</th><th>Ene</th><th>Feb</th><th>Mar</th><th>Abr</th><th>May</th><th>Jun</th><th>Jul</th><th>Ago</th><th>Sep</th><th>Oct</th><th>Nov</th><th>Dic</th><th>Total</th></tr></thead>
                 <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>🔄 Bitácora de Traslados (Historial)</h2>
+        <div class="table-wrap" style="max-height:250px">
+            <table id="transfersTable">
+                <thead><tr><th>Fecha</th><th>Código</th><th>Movimiento</th><th>Valor</th><th>Usuario</th></tr></thead>
+                <tbody><tr><td colspan="5" style="text-align:center; color:#999;">Cargando historial...</td></tr></tbody>
             </table>
         </div>
     </div>
@@ -227,22 +229,15 @@
     function unlockApp() {
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('mainContainer').style.display = 'block';
-        
-        // Cargar usuario guardado si coincide con las opciones
         const u = localStorage.getItem('u');
         if(u) {
              const uSelect = document.getElementById('uName');
-             // Si el usuario guardado es JIAT o MBR, lo seleccionamos. Si no, queda en JIAT por defecto.
-             if (u === "JIAT" || u === "MBR") {
-                 uSelect.value = u;
-             }
+             if (u === "JIAT" || u === "MBR") uSelect.value = u;
         }
         document.getElementById('date').valueAsDate = new Date();
-        
         syncData(true);
     }
 
-    // Si ya está autenticado, cargar
     if(localStorage.getItem('auth') === 'true') {
         document.addEventListener('DOMContentLoaded', unlockApp);
     }
@@ -274,7 +269,7 @@
         });
     }
 
-    // --- SINCRONIZACIÓN (INCLUYE TRASLADOS) ---
+    // --- SINCRONIZACIÓN ---
     async function syncData(showLoaderUI = false) {
         if(showLoaderUI) {
             document.getElementById('loader').style.display = 'flex';
@@ -288,18 +283,15 @@
             attempts++;
             try {
                 const ts = Date.now();
-                // 1. Presupuesto
                 const resB = await fetch(`${API_URL}?sheet=Presupuesto&t=${ts}`);
                 budget = await resB.json();
                 
                 if((!budget || budget.length === 0) && attempts === 1) throw new Error("Cold Start");
                 if(budget.length > 0) detectMonthHeaders(budget[0]);
 
-                // 2. Gastos
                 const resE = await fetch(`${API_URL}?sheet=Gastos&t=${ts}`);
                 expenses = await resE.json();
 
-                // 3. Traslados (NUEVO)
                 const resT = await fetch(`${API_URL}?sheet=Traslados&t=${ts}`);
                 transfers = await resT.json();
 
@@ -443,7 +435,6 @@
                 body: JSON.stringify({ data: updateData })
             });
 
-            // Registrar Traslado
             const logData = {
                 "Fecha": new Date().toISOString().split('T')[0],
                 "Codigo": transferData.code,
@@ -460,6 +451,10 @@
 
             document.getElementById('loadMsg').innerText = "Guardando gasto final...";
             await saveExpense(transferData.code, transferData.ref, transferData.amount, transferData.date, false, transferData.user);
+            
+            // CORRECCIÓN DOBLE GASTO: Limpiar formulario manualmente tras traslado
+            document.getElementById('ref').value = "";
+            document.getElementById('amtDisplay').value = "";
             
             alert("✅ Traslado realizado correctamente.");
             syncData(true);
@@ -588,7 +583,6 @@
         document.getElementById('kAvail').innerText = fmt(tBud-tSpent);
         document.getElementById('kPerc').innerText = tBud>0 ? ((tSpent/tBud)*100).toFixed(1)+"%" : "0%";
 
-        // RENDER GASTOS
         const th = document.querySelector('#histTable tbody');
         th.innerHTML = '';
         [...expenses].sort((a,b)=>getSmartValue(b,["id"])-getSmartValue(a,["id"])).slice(0,10).forEach(x => {
@@ -599,11 +593,10 @@
             const cod = getSmartValue(x, ["code","Code","CODIGO"]); // Agregado CODIGO
             const am = getSmartValue(x, ["amount","Amount","Monto"]);
             const id = getSmartValue(x, ["id","ID"]);
-            r.innerHTML = `<td>${d}</td><td>${cod}</td><td>${u}</td><td>${rf}</td><td style="font-weight:bold">${fmt(am)}</td><td style="text-align:right"><button class="danger" onclick="delExp(${id})">×</button></td>`;
+            r.innerHTML = `<td>${d}</td><td>${cod}</td><td>${u}</td><td>${rf}</td><td class="money">${fmt(am)}</td><td style="text-align:right"><button class="danger" onclick="delExp(${id})">×</button></td>`;
             th.appendChild(r);
         });
 
-        // RENDER TRASLADOS
         const tt = document.querySelector('#transfersTable tbody');
         tt.innerHTML = '';
         if(!transfers || transfers.length === 0) {
