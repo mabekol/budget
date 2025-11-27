@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Saint Aubin International - Control Avanzado</title>
+    <title>Saint Aubin International - Control Presupuestal</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
@@ -26,6 +26,7 @@
         .card h2 { margin-top: 0; color: var(--primary); font-size: 1.1rem; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; text-transform: uppercase; font-weight: 700; }
         .card.transfer-zone { border-top: 4px solid var(--warning); }
         .card.transfer-zone h2 { color: var(--warning); }
+        .card.analysis-zone { border-top: 4px solid var(--primary); background: #fbfdff; }
 
         /* GRID */
         .grid { display: grid; grid-template-columns: 1fr 1.5fr; gap: 25px; }
@@ -42,9 +43,9 @@
         button.primary { background: var(--primary); color: white; }
         button.accent { background: var(--accent); color: white; width: 100%; font-size: 1em; }
         button.warning { background: var(--warning); color: white; width: 100%; }
-        button.success { background: var(--success); color: white; font-size: 0.8em; padding: 8px 15px; }
-        button.danger { background: var(--danger); color: white; padding: 4px 8px; font-size: 0.75em; border-radius: 3px; }
-        button.action-icon { padding: 5px 10px; font-size: 1.2em; margin-left: 5px; }
+        button.success { background: var(--success); color: white; font-size: 0.8em; padding: 5px 10px; }
+        button.danger { background: var(--danger); color: white; padding: 5px 10px; font-size: 0.8em; border-radius: 3px; }
+        button.action-btn { margin-left: 5px; min-width: 30px; text-align: center; }
         button:hover { opacity: 0.9; transform: translateY(-1px); }
         button:disabled { background: #bdc3c7; cursor: not-allowed; transform: none; }
 
@@ -75,6 +76,11 @@
         .modal { background: white; padding: 30px; border-radius: 8px; width: 90%; max-width: 450px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); border-top: 6px solid var(--danger); animation: slideDown 0.3s ease; }
         @keyframes slideDown { from {transform: translateY(-30px); opacity:0;} to {transform: translateY(0); opacity:1;} }
         .transfer-box { background: #fff5f5; padding: 15px; border-radius: 5px; border: 1px solid #fed7d7; margin-top: 15px; }
+        
+        /* PROGRESS BAR */
+        .progress-bg { width: 100%; background: #e0e0e0; height: 12px; border-radius: 6px; margin-top: 5px; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.6s ease-out; }
+        .progress-fill.danger { background: var(--danger); }
     </style>
 </head>
 <body>
@@ -89,11 +95,10 @@
 
 <script>
     function checkPass() {
-        const p = document.getElementById('passInput').value;
-        if(p === "SaintAubin2025") {
+        if(document.getElementById('passInput').value === "SaintAubin2025") {
             document.getElementById('loginScreen').style.display = 'none';
             localStorage.setItem('auth', 'true');
-            unlockApp(); 
+            unlockApp();
         } else {
             document.getElementById('loginMsg').style.display = 'block';
         }
@@ -122,7 +127,6 @@
         <div class="transfer-box">
             <label style="color:var(--danger)">Autorizar traslado desde:</label>
             <select id="modalSourceMonth" style="background:white;"></select>
-            <small style="color:#c0392b">Se descontará del mes seleccionado.</small>
         </div>
         <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:25px;">
             <button onclick="closeModal()" style="background:#ecf0f1; color:#7f8c8d">Cancelar</button>
@@ -156,31 +160,16 @@
         <div class="card">
             <h2>Registrar Nuevo Gasto</h2>
             <form onsubmit="tryAddExpense(event)">
-                <div style="display:flex; gap:15px;">
-                    <div style="flex:1;">
-                        <label>Solicitante</label>
-                        <select id="uName" required>
-                            <option value="JIAT" selected>JIAT</option>
-                            <option value="MBR">MBR</option>
-                        </select>
-                    </div>
-                    <div style="flex:1;">
-                        <label>Estado del Gasto</label>
-                        <select id="status" required style="font-weight:bold; color:var(--primary);">
-                            <option value="COMPROMETIDO" style="color:#d35400;">🟠 Orden de Compra</option>
-                            <option value="PAGADO" style="color:#27ae60;">🟢 Factura / Pagado</option>
-                        </select>
-                    </div>
+                <div style="display:flex; gap:10px;">
+                    <div style="flex:1"><label>Solicitante</label><select id="uName" required><option value="JIAT" selected>JIAT</option><option value="MBR">MBR</option></select></div>
+                    <div style="flex:1"><label>Estado</label><select id="status" required><option value="OC">Orden de Compra</option><option value="PAGADO">Factura / Pagado</option></select></div>
                 </div>
                 
-                <label>Rubro Presupuestal</label>
-                <select id="selCode" required><option>Cargando...</option></select>
-                
-                <label>Concepto / Referencia</label>
-                <input type="text" id="ref" placeholder="Ej: OC-001 / Factura 123" required>
+                <label>Rubro</label><select id="selCode" required><option>Cargando...</option></select>
+                <label>Referencia</label><input type="text" id="ref" placeholder="Ej: OC-1001" required>
                 
                 <div style="display:flex; gap:15px;">
-                    <div style="flex:1"><label>Monto ($)</label><input type="text" id="amtDisplay" placeholder="0" required oninput="formatCurrencyInput(this)" style="font-weight:bold; color:var(--primary);"></div>
+                    <div style="flex:1"><label>Monto ($)</label><input type="text" id="amtDisplay" placeholder="0" required oninput="formatCurrencyInput(this)"></div>
                     <div style="flex:1"><label>Fecha</label><input type="date" id="date" required></div>
                 </div>
                 <button type="submit" id="btnSave" class="accent">Validar Disponibilidad</button>
@@ -188,12 +177,9 @@
         </div>
 
         <div class="card">
-            <h2>Últimos Movimientos</h2>
+            <h2>Últimos Gastos</h2>
             <div class="table-wrap" style="max-height:380px">
-                <table id="histTable">
-                    <thead><tr><th>Fecha</th><th>Ref/Cod</th><th>Monto</th><th>Estado</th><th></th></tr></thead>
-                    <tbody></tbody>
-                </table>
+                <table id="histTable"><thead><tr><th>Fecha</th><th>Detalle</th><th>Monto</th><th>Estado</th><th></th></tr></thead><tbody></tbody></table>
             </div>
         </div>
     </div>
@@ -203,7 +189,7 @@
         <div class="table-wrap"><table id="mainTable"><thead><tr><th>Cód</th><th>Ene</th><th>Feb</th><th>Mar</th><th>Abr</th><th>May</th><th>Jun</th><th>Jul</th><th>Ago</th><th>Sep</th><th>Oct</th><th>Nov</th><th>Dic</th><th>Total</th></tr></thead><tbody></tbody></table></div>
     </div>
 
-    <div class="grid-transfer">
+    <div class="grid">
         <div class="card transfer-zone">
             <h2>Módulo de Traslados</h2>
             <form onsubmit="handleTransfer(event)">
@@ -212,8 +198,8 @@
                     <div style="flex:1"><label>Origen</label><select id="monthSource" required></select></div>
                     <div style="flex:1"><label>Destino</label><select id="monthTarget" required></select></div>
                 </div>
-                <label>Valor ($)</label><input type="text" id="amtTransfer" placeholder="0" required oninput="formatCurrencyInput(this)" style="color:var(--warning); font-weight:bold;">
-                <button type="submit" class="warning">Autorizar Traslado</button>
+                <label>Valor ($)</label><input type="text" id="amtTransfer" placeholder="0" required oninput="formatCurrencyInput(this)">
+                <button type="submit" class="warning">Autorizar</button>
             </form>
         </div>
         <div class="card transfer-zone">
@@ -226,7 +212,7 @@
         <h2>🔍 Análisis Detallado</h2>
         <div style="display:flex; gap:15px; align-items:flex-end; margin-bottom:20px;">
             <div style="flex:1;"><label>Rubro:</label><select id="detailSelectCode" onchange="renderDetailView()" style="margin-bottom:0; border:2px solid var(--primary);"></select></div>
-            <button onclick="renderDetailView()" class="primary">Ver Detalle</button>
+            <button onclick="renderDetailView()" class="primary">Ver</button>
         </div>
         <div id="detailPanel" style="display:none;">
             <div class="kpi-box" style="background:white; border:1px solid #eee; margin-bottom:20px;">
@@ -239,20 +225,16 @@
                 <div class="progress-bg"><div class="progress-fill" id="dProgress"></div></div>
                 <div style="text-align:right; font-weight:bold; color:var(--primary)" id="dPercText">0%</div>
             </div>
-            
-            <div class="detail-subtitle">📉 Gastos Ejecutados</div>
             <div class="table-wrap" style="max-height:250px;">
-                <table id="detailTable"><thead><tr><th>Fecha</th><th>Ref</th><th>Monto</th><th>Estado</th></tr></thead><tbody></tbody></table>
+                <table id="detailTable"><thead><tr><th>Fecha</th><th>Ref</th><th>Solicitante</th><th>Monto</th></tr></thead><tbody></tbody></table>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-    // ==================================================
-    // ⚠️ PEGA TU URL DE SHEETDB AQUÍ ⚠️
+    // ⚠️ PEGA TU URL DE SHEETDB ⚠️
     const API_URL = "https://sheetdb.io/api/v1/sw4ed7qqbxl4k";
-    // ==================================================
 
     let budget = [], expenses = [], transfers = [];
     let DETECTED_HEADERS = new Array(12).fill(null); 
@@ -321,8 +303,8 @@
         }
 
         let totalSpent = 0;
-        const specificExpenses = expenses.filter(x => getSmartValue(x, ["code","Code","CODIGO"]) == code);
-        specificExpenses.forEach(x => { totalSpent += parseFloat(getSmartValue(x, ["amount","Amount","Monto"]))||0; });
+        const specificExpenses = expenses.filter(x => getSmartValue(x, ["code","Code","codigo","CODIGO"]) == code);
+        specificExpenses.forEach(x => { totalSpent += parseFloat(getSmartValue(x, ["amount","Amount","monto","MONTO"]))||0; });
 
         document.getElementById('dTotal').innerText = fmt(totalBudget);
         document.getElementById('dSpent').innerText = fmt(totalSpent);
@@ -342,17 +324,7 @@
             specificExpenses.sort((a,b) => new Date(getSmartValue(b,["date"])) - new Date(getSmartValue(a,["date"])));
             specificExpenses.forEach(x => {
                 const r = document.createElement('tr');
-                const status = getSmartValue(x, ["status","Estado","ESTADO"]) || "COMPROMETIDO";
-                const statusClass = status === 'PAGADO' ? 'status-paid' : 'status-committed';
-                const statusLabel = status === 'PAGADO' ? 'PAGADO' : 'OC';
-                
-                r.innerHTML = `
-                    <td>${getSmartValue(x,["date"])}</td>
-                    <td>${getSmartValue(x,["ref"])}</td>
-                    <td>${getSmartValue(x,["user"])||"JIAT"}</td>
-                    <td class="money">${fmt(getSmartValue(x,["amount"]))}</td>
-                    <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
-                `;
+                r.innerHTML = `<td>${getSmartValue(x,["date","fecha"])}</td><td>${getSmartValue(x,["ref","referencia"])}</td><td>${getSmartValue(x,["user","usuario"])||"JIAT"}</td><td class="money">${fmt(getSmartValue(x,["amount","monto"]))}</td>`;
                 tbody.appendChild(r);
             });
         }
@@ -370,10 +342,10 @@
             }
         });
         expenses.forEach(x => {
-            const d = getSmartValue(x, ["date","Date","Fecha"]);
+            const d = getSmartValue(x, ["date","Date","fecha","FECHA"]);
             if(d) {
                 const m = parseInt(d.split('-')[1])-1;
-                const a = parseFloat(getSmartValue(x, ["amount","Amount","Monto"]))||0;
+                const a = parseFloat(getSmartValue(x, ["amount","Amount","monto","MONTO"]))||0;
                 if(m>=0 && m<12) dataSpent[m] += a;
             }
         });
@@ -425,10 +397,10 @@
         const amount = getAmountValue('amtDisplay');
         const dateStr = document.getElementById('date').value;
         const ref = document.getElementById('ref').value;
-        const status = document.getElementById('status').value;
+        const status = document.getElementById('status') ? document.getElementById('status').value : "OC";
         const mIdx = parseInt(dateStr.split('-')[1])-1;
         
-        const line = budget.find(b => getSmartValue(b, ["CODIGO","Codigo"]) == code);
+        const line = budget.find(b => getSmartValue(b, ["CODIGO","Codigo","Code"]) == code);
         if(!line) { alert("Código no encontrado"); btn.disabled=false; btn.innerText="Validar"; return; }
         
         let raw = getSmartValue(line, MONTH_POSSIBILITIES[mIdx])||"0";
@@ -437,8 +409,8 @@
         
         let spent = 0;
         expenses.forEach(x => {
-            if(getSmartValue(x,["code","Code"])==code && (parseInt(getSmartValue(x,["date","Date"]).split('-')[1])-1)==mIdx) 
-                spent += parseFloat(getSmartValue(x,["amount","Amount"]));
+            if(getSmartValue(x,["code","Code","codigo","CODIGO"])==code && (parseInt(getSmartValue(x,["date","Date","fecha","FECHA"]).split('-')[1])-1)==mIdx) 
+                spent += parseFloat(getSmartValue(x,["amount","Amount","monto","MONTO"]));
         });
 
         if(amount > (budMonth - spent)) {
@@ -449,21 +421,21 @@
         }
     }
 
-    // NUEVA FUNCION PARA PAGAR OC
+    // NUEVA FUNCION PARA LEGALIZAR (PAGAR)
     async function markAsPaid(id) {
         if(!confirm("¿Confirmar pago de esta Orden?")) return;
         document.getElementById('loader').style.display = 'flex';
-        document.getElementById('loadMsg').innerText = "Actualizando estado...";
         
         try {
-            // PATCH a SheetDB para cambiar solo el campo Estado
+            // PATCH para actualizar solo el estado en SheetDB
+            // Usamos la columna 'id' como llave (debe existir en Excel)
             await fetch(`${API_URL}/id/${id}?sheet=Gastos`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data: { "Estado": "PAGADO" } })
+                body: JSON.stringify({ data: { "estado": "PAGADO" } }) // Enviamos en minuscula para estandarizar
             });
             
-            alert("✅ Estado actualizado a PAGADO");
+            alert("✅ Estado actualizado.");
             syncData(true);
         } catch(e) {
             alert("Error: " + e.message);
@@ -494,8 +466,8 @@
         
         let spentSrc = 0;
         expenses.forEach(x => {
-            if(getSmartValue(x,["code","Code"])==code && (parseInt(getSmartValue(x,["date","Date"]).split('-')[1])-1)==sIdx)
-                spentSrc += parseFloat(getSmartValue(x,["amount","Amount"]));
+            if(getSmartValue(x,["code","Code","codigo"])==code && (parseInt(getSmartValue(x,["date","Date","fecha"]).split('-')[1])-1)==sIdx)
+                spentSrc += parseFloat(getSmartValue(x,["amount","Amount","monto"]));
         });
 
         if(amount > (budSrc - spentSrc)) {
@@ -514,7 +486,7 @@
                 method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({data: upd})
             });
             
-            const log = { "Fecha": new Date().toISOString().split('T')[0], "Codigo": code, "Origen": colSrc, "Destino": colTgt, "Valor": amount, "Usuario": user };
+            const log = { "fecha": new Date().toISOString().split('T')[0], "codigo": code, "origen": colSrc, "destino": colTgt, "valor": amount, "usuario": user };
             await fetch(`${API_URL}?sheet=Traslados`, {
                 method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({data: [log]})
             });
@@ -529,13 +501,16 @@
         document.getElementById('loader').style.display = 'flex';
         const user = document.getElementById('uName').value;
         localStorage.setItem('u', user);
+        
+        // Payload en minúsculas para coincidir con los encabezados estandarizados
         const data = { 
-            "id": Date.now(), "code": code, "CODIGO": code, 
-            "ref": ref, "REFERENCIA": ref, 
-            "amount": amount, "MONTO": amount, 
-            "date": date, "FECHA": date, 
-            "user": user, "USUARIO": user,
-            "status": status, "Estado": status
+            "id": Date.now(), 
+            "codigo": code, 
+            "referencia": ref, 
+            "monto": amount, 
+            "fecha": date, 
+            "usuario": user,
+            "estado": status || "OC"
         };
         
         try {
@@ -563,7 +538,6 @@
         const c1=sel1.value, c2=sel2.value, c3=sel3.value;
         const opts = '<option value="">-- Seleccionar --</option>';
         sel1.innerHTML=opts; sel2.innerHTML=opts; sel3.innerHTML=opts;
-        
         budget.forEach(b => {
             const c = getSmartValue(b, ["CODIGO","Codigo"]);
             const d = getSmartValue(b, ["DESCRIPCION","Descripcion"])||"";
@@ -577,10 +551,10 @@
         const expMap = {};
         let tSpent = 0;
         expenses.forEach(x => {
-            const d = getSmartValue(x, ["date","Date","Fecha"]); if(!d) return;
+            const d = getSmartValue(x, ["date","Date","fecha","FECHA"]); if(!d) return;
             const m = parseInt(d.split('-')[1])-1;
-            const c = getSmartValue(x, ["code","Code","CODIGO"]);
-            const a = parseFloat(getSmartValue(x, ["amount","Amount","Monto"]))||0;
+            const c = getSmartValue(x, ["code","Code","codigo","CODIGO"]);
+            const a = parseFloat(getSmartValue(x, ["amount","Amount","monto","MONTO"]))||0;
             expMap[`${c}-${m}`] = (expMap[`${c}-${m}`]||0) + a;
             tSpent += a;
         });
@@ -617,35 +591,24 @@
 
         const th = document.querySelector('#histTable tbody');
         th.innerHTML = '';
-        [...expenses].sort((a,b)=>getSmartValue(b,["id"])-getSmartValue(a,["id"])).forEach(x => {
+        [...expenses].sort((a,b)=>getSmartValue(b,["id"])-getSmartValue(a,["id"])).slice(0,20).forEach(x => {
             const r = document.createElement('tr');
-            const d = getSmartValue(x, ["date","Date"]);
-            const u = getSmartValue(x, ["user","User"])||"JIAT";
-            const rf = getSmartValue(x, ["ref","Ref"]);
-            const cd = getSmartValue(x, ["code","Code"]);
-            const am = getSmartValue(x, ["amount","Amount"]);
+            const d = getSmartValue(x, ["date","Date","fecha","FECHA"]);
+            const cd = getSmartValue(x, ["code","Code","codigo","CODIGO"]);
+            const u = getSmartValue(x, ["user","User","usuario","USUARIO"])||"JIAT";
+            const rf = getSmartValue(x, ["ref","Ref","referencia","REFERENCIA"]);
+            const am = getSmartValue(x, ["amount","Amount","monto","MONTO"]);
             const id = getSmartValue(x, ["id","ID"]);
             
-            // Lógica de Estado
-            const st = getSmartValue(x, ["status","Estado"]) || "COMPROMETIDO";
-            const isPaid = st === "PAGADO";
+            // Estado
+            const st = getSmartValue(x, ["status","Status","estado","ESTADO"]) || "OC";
+            const isPaid = st.toUpperCase() === "PAGADO";
             const badgeClass = isPaid ? "status-paid" : "status-committed";
-            const badgeText = isPaid ? "PAGADO" : "OC (Pend)";
-            
-            // Botón de Acción: Si es OC, muestra Check para pagar. Si es pagado, nada.
-            const actionBtn = !isPaid 
-                ? `<button class="success action-icon" title="Legalizar / Pagar" onclick="markAsPaid(${id})">✅</button>` 
-                : '';
+            const actionBtn = !isPaid ? `<button class="success action-btn" title="Pagar" onclick="markAsPaid(${id})">✅</button>` : '';
 
-            r.innerHTML = `
-                <td>${d}</td>
-                <td>${cd}<br><small>${rf}</small></td>
-                <td class="money">${fmt(am)}</td>
-                <td><span class="status-badge ${badgeClass}">${badgeText}</span></td>
-                <td style="text-align:right; white-space:nowrap;">
-                    ${actionBtn}
-                    <button class="danger action-icon" onclick="delExp(${id})">🗑️</button>
-                </td>`;
+            r.innerHTML = `<td>${d}</td><td>${cd}<br><small>${rf}</small></td><td class="money">${fmt(am)}</td>
+                           <td><span class="status-badge ${badgeClass}">${st}</span></td>
+                           <td style="white-space:nowrap;">${actionBtn}<button class="danger action-btn" onclick="delExp(${id})">🗑️</button></td>`;
             th.appendChild(r);
         });
 
@@ -655,34 +618,10 @@
         else {
             [...transfers].reverse().slice(0,10).forEach(t => {
                 const r = document.createElement('tr');
-                r.innerHTML = `<td>${getSmartValue(t, ["Fecha"])}</td><td>${getSmartValue(t, ["Codigo"])}</td><td><span class="badge-transfer">${getSmartValue(t, ["Origen"])} ➔ ${getSmartValue(t, ["Destino"])}</span></td><td style="font-weight:bold">${fmt(getSmartValue(t, ["Valor"]))}</td><td>${getSmartValue(t, ["Usuario"])}</td>`;
+                r.innerHTML = `<td>${getSmartValue(t, ["fecha"])}</td><td>${getSmartValue(t, ["codigo"])}</td><td><span class="badge-transfer">${getSmartValue(t, ["origen"])} ➔ ${getSmartValue(t, ["destino"])}</span></td><td style="font-weight:bold">${fmt(getSmartValue(t, ["valor"]))}</td><td>${getSmartValue(t, ["usuario"])}</td>`;
                 tt.appendChild(r);
             });
         }
-    }
-
-    function downloadExcel() {
-        let csv = "Codigo,Ene,Feb,Mar,Abr,May,Jun,Jul,Ago,Sep,Oct,Nov,Dic,Total\n";
-        budget.forEach(l => {
-            const c = getSmartValue(l, ["CODIGO","Codigo"]); if(!c) return;
-            let r = [c], tot=0;
-            for(let i=0; i<12; i++) {
-                let raw = getSmartValue(l, MONTH_POSSIBILITIES[i])||"0";
-                let b = parseFloat(typeof raw==='string'?raw.replace(/\./g,'').replace(/,/g,'.'):raw)||0;
-                let s = 0;
-                expenses.forEach(x => {
-                    if(getSmartValue(x,["code","Code"])==c && (parseInt(getSmartValue(x,["date","Date"]).split('-')[1])-1)==i)
-                        s += parseFloat(getSmartValue(x,["amount","Amount"]));
-                });
-                r.push(b-s); tot += (b-s);
-            }
-            r.push(tot); csv += r.join(",")+"\n";
-        });
-        const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = "Ejecucion_Presupuestal.csv";
-        link.click();
     }
 
     function fmt(n) { return new Intl.NumberFormat('es-CO', {maximumFractionDigits:0}).format(n); }
