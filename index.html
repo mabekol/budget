@@ -293,24 +293,89 @@
         }
     }
 
-    async function saveExpense(code, ref, amount, date, hideLoader=true) {
+async function saveExpense(code, ref, amount, date, hideLoader = true) {
         if(hideLoader) document.getElementById('loader').style.display = 'flex';
         
-        const data = { id: Date.now(), code, ref, amount, date };
+        const user = document.getElementById('uName').value || localStorage.getItem('u') || "Anónimo";
 
-        await fetch(`${API_URL}?sheet=Gastos`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ data })
-        });
-        
-        expenses.push(data);
-        if(hideLoader) {
-            renderUI();
-            document.getElementById('ref').value = "";
-            document.getElementById('amtDisplay').value = "";
-            document.getElementById('loader').style.display = 'none';
-            alert("✅ Guardado");
+        // PREPARAMOS EL PAQUETE DE DATOS
+        // Enviamos las llaves en varios formatos para asegurar que coincidan con tu Excel
+        // SheetDB ignorará las columnas que no existan en el Excel.
+        const rowData = {
+            "id": Date.now(),
+            "ID": Date.now(),
+            
+            "user": user,
+            "User": user,
+            "Usuario": user,
+            "USUARIO": user,
+            
+            "code": code,
+            "Code": code,
+            "Codigo": code,
+            "CODIGO": code,
+            
+            "ref": ref,
+            "Ref": ref,
+            "Referencia": ref,
+            "REFERENCIA": ref,
+            
+            "amount": amount,
+            "Amount": amount,
+            "Monto": amount,
+            "MONTO": amount,
+            "Valor": amount,
+            
+            "date": date,
+            "Date": date,
+            "Fecha": date,
+            "FECHA": date
+        };
+
+        try {
+            // ENVIAR A SHEETDB (Hoja Gastos)
+            // Nota: Enviamos 'data' como un Array [rowData]
+            const res = await fetch(`${API_URL}?sheet=Gastos`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ data: [rowData] })
+            });
+
+            if (!res.ok) throw new Error("SheetDB rechazó el guardado (" + res.status + ")");
+            
+            // Si llegamos aquí, se guardó en la nube
+            // Guardamos en local para verlo inmediato
+            // (Usamos nombres estandarizados internamente)
+            expenses.push({
+                id: rowData.id,
+                code: code,
+                ref: ref,
+                amount: amount,
+                date: date,
+                user: user
+            });
+
+            if(hideLoader) {
+                renderUI();
+                // Limpiar formulario
+                document.getElementById('ref').value = "";
+                document.getElementById('amtDisplay').value = "";
+                document.getElementById('loader').style.display = 'none';
+                alert("✅ Gasto registrado en la Nube correctamente.");
+            }
+
+        } catch (e) {
+            console.error(e);
+            if(hideLoader) {
+                document.getElementById('loader').style.display = 'none';
+                alert("⚠️ Error al guardar en la hoja Gastos: " + e.message);
+            } else {
+                // Si viene de un traslado, lanzamos el error hacia arriba
+                throw e;
+            }
         }
     }
 
@@ -397,3 +462,4 @@
 </script>
 </body>
 </html>
+
