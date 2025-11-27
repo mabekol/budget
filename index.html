@@ -5,16 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Saint Aubin International - Control Presupuestal</title>
     <style>
-        /* === ESTILOS G&C === */
+        /* === IDENTIDAD VISUAL SAINT AUBIN === */
         :root {
-            --primary: #002B5C;       /* Azul Oscuro */
-            --accent: #00A3E0;        /* Azul Celeste */
-            --bg: #F4F7FA;            /* Fondo */
+            --primary: #002B5C;       /* Azul Oscuro Corporativo */
+            --accent: #00A3E0;        /* Azul Celeste Brillante */
+            --bg: #F4F7FA;            /* Fondo Gris Azulado muy claro */
             --white: #ffffff;
             --text: #2C3E50;
             --danger: #D32F2F;
             --success: #2E7D32;
-            --warning: #f39c12;
         }
         
         body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); padding: 20px; color: var(--text); font-size:14px; }
@@ -58,9 +57,6 @@
         td { padding: 10px; border-bottom: 1px solid #f0f4f8; color: #34495e; }
         tr:hover { background-color: #f9fcff; }
         
-        /* Estilo para los Badges de Traslado */
-        .badge-transfer { background: #e3f2fd; color: #1565c0; padding: 4px 8px; border-radius: 12px; font-weight: bold; font-size: 0.85em; border: 1px solid #bbdefb; }
-
         /* LOADER & MODAL */
         #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 999; display: none; }
         .spinner { width: 40px; height: 40px; border: 4px solid #ecf0f1; border-top: 4px solid var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 15px; }
@@ -152,7 +148,10 @@
             <form onsubmit="tryAddExpense(event)">
                 <div style="margin-bottom:5px;">
                     <label>Solicitante</label>
-                    <input type="text" id="uName" placeholder="Nombre del responsable" required>
+                    <select id="uName" required>
+                        <option value="JIAT" selected>JIAT</option>
+                        <option value="MBR">MBR</option>
+                    </select>
                 </div>
                 
                 <label>Rubro Presupuestal</label>
@@ -229,8 +228,15 @@
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('mainContainer').style.display = 'block';
         
+        // Cargar usuario guardado si coincide con las opciones
         const u = localStorage.getItem('u');
-        if(u) document.getElementById('uName').value = u;
+        if(u) {
+             const uSelect = document.getElementById('uName');
+             // Si el usuario guardado es JIAT o MBR, lo seleccionamos. Si no, queda en JIAT por defecto.
+             if (u === "JIAT" || u === "MBR") {
+                 uSelect.value = u;
+             }
+        }
         document.getElementById('date').valueAsDate = new Date();
         
         syncData(true);
@@ -464,6 +470,7 @@
         }
     }
 
+    // --- GUARDAR GASTO ---
     async function saveExpense(code, ref, amount, date, hideLoader=true, explicitUser=null) {
         if(hideLoader) document.getElementById('loader').style.display = 'flex';
         
@@ -540,9 +547,9 @@
             if(!d) return;
             const p = d.split('-');
             const m = parseInt(p[1])-1;
-            const k = `${getSmartValue(x,["code","Code","CODIGO"])}-${m}`;
+            const c = getSmartValue(x, ["code","Code","Codigo","CODIGO"]);
             const val = parseFloat(getSmartValue(x, ["amount","Amount","Monto","MONTO"])) || 0;
-            expMap[k] = (expMap[k]||0) + val;
+            expMap[`${c}-${m}`] = (expMap[`${c}-${m}`]||0) + val;
             tSpent += val;
         });
 
