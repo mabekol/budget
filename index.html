@@ -32,6 +32,8 @@
         .card h2 { margin-top: 0; color: var(--primary); font-size: 1.1rem; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; text-transform: uppercase; font-weight: 700; }
         .card.transfer-zone { border-top: 4px solid var(--warning); }
         .card.transfer-zone h2 { color: var(--warning); }
+        /* Estilo para la zona de análisis */
+        .card.analysis-zone { border-top: 4px solid var(--primary); background: #fbfdff; }
 
         /* LAYOUT */
         .grid { display: grid; grid-template-columns: 1fr 1.5fr; gap: 25px; }
@@ -66,53 +68,13 @@
         td { padding: 10px; border-bottom: 1px solid #f0f4f8; color: #34495e; }
         tr:hover { background-color: #f9fcff; }
         
-        /* === NUEVO: ESTILOS DEL TOOLTIP (POPUP) === */
-        .tooltip-container {
-            position: relative;
-            display: inline-block;
-            cursor: help; /* Cambia el cursor a interrogación */
-            border-bottom: 1px dashed var(--accent); /* Subrayado sutil */
-        }
-        
-        .tooltip-text {
-            visibility: hidden;
-            width: 250px; /* Ancho del popup */
-            background-color: #002B5C;
-            color: #fff;
-            text-align: left;
-            border-radius: 6px;
-            padding: 10px;
-            position: absolute;
-            z-index: 100;
-            bottom: 125%; /* Posición arriba del texto */
-            left: 50%;
-            margin-left: -125px; /* Centrar */
-            opacity: 0;
-            transition: opacity 0.3s;
-            font-size: 0.85em;
-            font-weight: normal;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-            line-height: 1.4;
-        }
-        
-        .tooltip-text::after {
-            content: "";
-            position: absolute;
-            top: 100%;
-            left: 50%;
-            margin-left: -5px;
-            border-width: 5px;
-            border-style: solid;
-            border-color: #002B5C transparent transparent transparent;
-        }
-        
-        .tooltip-container:hover .tooltip-text {
-            visibility: visible;
-            opacity: 1;
-        }
-
         /* Badges */
         .badge-transfer { background: #fff3e0; color: #e67e22; padding: 4px 8px; border-radius: 12px; font-weight: bold; font-size: 0.85em; border: 1px solid #ffe0b2; }
+
+        /* PROGRESS BAR */
+        .progress-bg { width: 100%; background: #e0e0e0; height: 10px; border-radius: 5px; margin-top: 5px; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.5s; }
+        .progress-fill.danger { background: var(--danger); }
 
         /* LOADER & MODAL */
         #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 999; display: none; }
@@ -152,14 +114,11 @@
         localStorage.removeItem('auth');
         location.reload();
     }
-    // Comprobación inicial segura
     window.onload = function() {
         if(localStorage.getItem('auth') === 'true') {
             document.getElementById('loginScreen').style.display = 'none';
             unlockApp();
         }
-        
-        // Seguridad anti-pantalla blanca
         setTimeout(() => {
             if(document.getElementById('loginScreen').style.display === 'none') {
                 document.getElementById('mainContainer').style.display = 'block';
@@ -168,7 +127,7 @@
     };
 </script>
 
-<div id="loader" style="display:none;">
+<div id="loader">
     <div class="spinner"></div>
     <h3 style="color:var(--primary)">Procesando...</h3>
     <p id="loadMsg" style="color:#7f8c8d">Conectando con base de datos segura...</p>
@@ -214,7 +173,7 @@
 
         <div class="kpi-container">
             <div class="kpi-card"><small>Presupuesto Total</small><div class="kpi-val" id="kTotal">$0</div></div>
-            <div class="kpi-card"><small>Disponible Real</small><div class="kpi-val" id="kAvail">$0</div></div>
+            <div class="kpi-card"><small>Disponible Real</small><div class="kpi-val" id="kAvail" style="color:var(--success)">$0</div></div>
             <div class="kpi-card"><small>% Ejecución</small><div class="kpi-val" id="kPerc" style="color:var(--accent)">0%</div></div>
         </div>
     </div>
@@ -310,6 +269,44 @@
             </div>
         </div>
     </div>
+
+    <div class="card analysis-zone" style="margin-top: 25px;">
+        <h2>🔍 Análisis Detallado por Rubro</h2>
+        
+        <div style="display:flex; gap:15px; align-items:flex-end; margin-bottom:20px;">
+            <div style="flex:1;">
+                <label>Seleccionar Rubro para Inspeccionar:</label>
+                <select id="detailSelectCode" onchange="renderDetailView()" style="margin-bottom:0; border:2px solid var(--primary);"></select>
+            </div>
+            <button onclick="renderDetailView()" class="primary">Ver Detalle</button>
+        </div>
+
+        <div id="detailPanel" style="display:none;">
+            
+            <div class="kpi-box" style="background:white; border:1px solid #eee; margin-bottom:20px;">
+                <div><small>Presupuesto Anual</small><div class="kpi-val" id="dTotal">$0</div></div>
+                <div><small>Total Gastado</small><div class="kpi-val" id="dSpent" style="color:var(--danger)">$0</div></div>
+                <div><small>Saldo Disponible</small><div class="kpi-val" id="dAvail" style="color:var(--success)">$0</div></div>
+            </div>
+
+            <div style="margin-bottom:20px;">
+                <label>Porcentaje de Ejecución:</label>
+                <div class="progress-bg">
+                    <div class="progress-fill" id="dProgress"></div>
+                </div>
+                <div style="text-align:right; font-weight:bold; color:var(--primary)" id="dPercText">0%</div>
+            </div>
+
+            <label>Detalle de Gastos de este Rubro:</label>
+            <div class="table-wrap" style="max-height:250px;">
+                <table id="detailTable">
+                    <thead><tr><th>Fecha</th><th>Ref</th><th>Solicitante</th><th>Monto</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <script>
@@ -320,7 +317,7 @@
 
     let budget = [], expenses = [], transfers = [];
     let DETECTED_HEADERS = new Array(12).fill(null); 
-    let myChart = null; 
+    let myChart = null;
     
     const MONTH_POSSIBILITIES = [
         ["ENERO","Enero","ENE","JAN","January"], ["FEBRERO","Febrero","FEB","February"], ["MARZO","Marzo","MAR","March"],
@@ -335,17 +332,12 @@
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('mainContainer').style.display = 'block';
         const u = localStorage.getItem('u');
-        if(u) {
-             const uSelect = document.getElementById('uName');
-             if (u === "JIAT" || u === "MBR") uSelect.value = u;
+        if(u && (u === "JIAT" || u === "MBR")) {
+             document.getElementById('uName').value = u;
         }
         document.getElementById('date').valueAsDate = new Date();
         populateMonthSelects();
         syncData(true);
-    }
-
-    if(localStorage.getItem('auth') === 'true') {
-        document.addEventListener('DOMContentLoaded', unlockApp);
     }
 
     function populateMonthSelects() {
@@ -358,6 +350,73 @@
             const op2 = document.createElement('option'); op2.value = i; op2.text = m;
             s1.appendChild(op1); s2.appendChild(op2);
         });
+    }
+
+    // --- NUEVA FUNCIÓN: DETALLE POR RUBRO ---
+    function renderDetailView() {
+        const code = document.getElementById('detailSelectCode').value;
+        if(!code) return;
+
+        const panel = document.getElementById('detailPanel');
+        panel.style.display = 'block';
+
+        // 1. Calcular Totales
+        const line = budget.find(b => getSmartValue(b, ["CODIGO","Codigo"]) == code);
+        if(!line) return;
+
+        let totalBudget = 0;
+        // Sumamos los 12 meses del presupuesto actual
+        for(let i=0; i<12; i++) {
+            let rawBud = getSmartValue(line, MONTH_POSSIBILITIES[i]) || "0";
+            if(typeof rawBud === 'string') rawBud = rawBud.replace(/\./g,'').replace(/,/g,'.');
+            totalBudget += (parseFloat(rawBud) || 0);
+        }
+
+        // 2. Filtrar Gastos
+        let totalSpent = 0;
+        const specificExpenses = expenses.filter(x => {
+            const c = getSmartValue(x, ["code","Code","CODIGO"]);
+            return c == code;
+        });
+
+        specificExpenses.forEach(x => {
+            totalSpent += parseFloat(getSmartValue(x, ["amount","Amount","Monto"])) || 0;
+        });
+
+        // 3. Actualizar KPIs del detalle
+        document.getElementById('dTotal').innerText = fmt(totalBudget);
+        document.getElementById('dSpent').innerText = fmt(totalSpent);
+        document.getElementById('dAvail').innerText = fmt(totalBudget - totalSpent);
+
+        // 4. Barra de Progreso
+        let perc = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
+        if(perc > 100) perc = 100;
+        const bar = document.getElementById('dProgress');
+        bar.style.width = perc + "%";
+        bar.className = perc > 90 ? "progress-fill danger" : "progress-fill";
+        document.getElementById('dPercText').innerText = perc.toFixed(1) + "%";
+
+        // 5. Tabla de Detalles
+        const tbody = document.querySelector('#detailTable tbody');
+        tbody.innerHTML = '';
+        
+        if(specificExpenses.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#999">No hay gastos registrados</td></tr>';
+        } else {
+            // Ordenar por fecha
+            specificExpenses.sort((a,b) => new Date(getSmartValue(b, ["date"])) - new Date(getSmartValue(a, ["date"])));
+            
+            specificExpenses.forEach(x => {
+                const r = document.createElement('tr');
+                r.innerHTML = `
+                    <td>${getSmartValue(x, ["date"])}</td>
+                    <td>${getSmartValue(x, ["ref"])}</td>
+                    <td>${getSmartValue(x, ["user"]) || "-"}</td>
+                    <td class="money">${fmt(getSmartValue(x, ["amount"]))}</td>
+                `;
+                tbody.appendChild(r);
+            });
+        }
     }
 
     // --- UTILIDADES ---
@@ -387,7 +446,7 @@
         });
     }
 
-    // --- EXCEL ---
+    // --- EXPORTAR A EXCEL ---
     function downloadExcel() {
         let csv = "Codigo,Ene,Feb,Mar,Abr,May,Jun,Jul,Ago,Sep,Oct,Nov,Dic,Total\n";
         budget.forEach(l => {
@@ -425,7 +484,6 @@
     // --- CHART ---
     function updateChart() {
         if (typeof Chart === 'undefined') return;
-        
         const ctx = document.getElementById('budgetChart').getContext('2d');
         let dataBudget = new Array(12).fill(0);
         let dataSpent = new Array(12).fill(0);
@@ -500,7 +558,7 @@
         if(showLoaderUI) document.getElementById('loader').style.display = 'none';
     }
 
-    // --- VALIDACIÓN ---
+    // --- LOGICA DE NEGOCIO ---
     async function tryAddExpense(e) {
         e.preventDefault();
         const btn = document.getElementById('btnSave');
@@ -544,7 +602,6 @@
         }
     }
 
-    // --- TRASLADOS ---
     async function handleTransfer(e) {
         e.preventDefault();
         const code = document.getElementById('selCodeTransfer').value;
@@ -562,10 +619,9 @@
 
         await syncData(false);
         const line = budget.find(b => getSmartValue(b, ["CODIGO","Codigo","Code"]) == code);
-        
         const colSource = DETECTED_HEADERS[sourceIdx];
         const colTarget = DETECTED_HEADERS[targetIdx];
-
+        
         if(!colSource || !colTarget) { document.getElementById('loader').style.display = 'none'; return alert("Error DB"); }
 
         let rawBud = line[colSource] || "0";
@@ -616,7 +672,6 @@
         } catch (e) { alert("Error: " + e.message); document.getElementById('loader').style.display = 'none'; }
     }
 
-    // --- GUARDAR GASTO ---
     async function saveExpense(code, ref, amount, date) {
         document.getElementById('loader').style.display = 'flex';
         document.getElementById('loadMsg').innerText = "Guardando gasto...";
@@ -651,7 +706,7 @@
     }
 
     async function delExp(id) {
-        if(!confirm("¿Borrar?")) return;
+        if(!confirm("¿Borrar este registro?")) return;
         document.getElementById('loader').style.display = 'flex';
         try {
             await fetch(`${API_URL}/id/${id}?sheet=Gastos`, { method: 'DELETE' });
@@ -663,9 +718,12 @@
     function renderUI() {
         const sel1 = document.getElementById('selCode');
         const sel2 = document.getElementById('selCodeTransfer');
-        const c1 = sel1.value; const c2 = sel2.value;
+        const sel3 = document.getElementById('detailSelectCode'); // Nuevo selector
+        const c1 = sel1.value; const c2 = sel2.value; const c3 = sel3.value;
+        
         const opts = '<option value="">-- Seleccionar Rubro --</option>';
-        sel1.innerHTML = opts; sel2.innerHTML = opts;
+        sel1.innerHTML = opts; sel2.innerHTML = opts; sel3.innerHTML = opts;
+        
         budget.forEach(b => {
             const code = getSmartValue(b, ["CODIGO","Codigo"]);
             const desc = getSmartValue(b, ["DESCRIPCION","Descripcion"]) || "";
@@ -673,10 +731,11 @@
                 const txt = `${code} - ${desc.substring(0,35)}`;
                 const o1 = document.createElement('option'); o1.value = code; o1.text = txt;
                 const o2 = document.createElement('option'); o2.value = code; o2.text = txt;
-                sel1.appendChild(o1); sel2.appendChild(o2);
+                const o3 = document.createElement('option'); o3.value = code; o3.text = txt;
+                sel1.appendChild(o1); sel2.appendChild(o2); sel3.appendChild(o3);
             }
         });
-        if(c1) sel1.value = c1; if(c2) sel2.value = c2;
+        if(c1) sel1.value = c1; if(c2) sel2.value = c2; if(c3) sel3.value = c3;
 
         const expMap = {};
         let tSpent = 0;
@@ -699,12 +758,7 @@
             const code = getSmartValue(l, ["CODIGO","Codigo"]);
             if(!code) return;
             const tr = document.createElement('tr');
-            let h = `
-                <td class="tooltip-container">
-                    <b>${code}</b>
-                    <span class="tooltip-text">${getSmartValue(l, ["DESCRIPCION","Descripcion"])||""}</span>
-                </td>
-            `;
+            let h = `<td class="tooltip-container"><b>${code}</b><span class="tooltip-text">${getSmartValue(l, ["DESCRIPCION","Descripcion"])||""}</span></td>`;
             let rowSum = 0;
             for(let i=0; i<12; i++) {
                 let rawVal = getSmartValue(l, MONTH_POSSIBILITIES[i]) || "0";
@@ -746,7 +800,7 @@
         if(!transfers || transfers.length === 0) {
             tt.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">Sin movimientos</td></tr>';
         } else {
-            [...transfers].reverse().slice(0,10).forEach(t => {
+            [...transfers].reverse().forEach(t => {
                 const r = document.createElement('tr');
                 const date = getSmartValue(t, ["Fecha","FECHA"]);
                 const cod = getSmartValue(t, ["Codigo","CODIGO"]);
