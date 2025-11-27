@@ -22,9 +22,9 @@
         button.accent { background: var(--accent); color: #004d40; width: 100%; }
         button.danger { background: var(--danger); padding: 5px 10px; font-size: 0.8em; }
         
+        /* KPI & TABLE */
         .kpi-box { display: flex; justify-content: space-between; text-align: center; }
         .kpi-val { font-size: 1.5rem; font-weight: bold; color: var(--primary); }
-        
         table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
         th { background: var(--primary); color: white; padding: 8px; text-align: left; }
         td { padding: 8px; border-bottom: 1px solid #eee; }
@@ -114,10 +114,8 @@
     // ==================================================
 
     let budget = [], expenses = [];
-    // Mapeo de meses detectados (se llena automáticamente al cargar)
     let DETECTED_HEADERS = new Array(12).fill(null); 
     
-    // Lista de posibles nombres para buscar
     const MONTH_POSSIBILITIES = [
         ["ENERO","Enero","ENE","JAN"], ["FEBRERO","Febrero","FEB"], ["MARZO","Marzo","MAR"],
         ["ABRIL","Abril","ABR","APR"], ["MAYO","Mayo","MAY"], ["JUNIO","Junio","JUN"],
@@ -132,7 +130,7 @@
         syncData();
     });
 
-    // --- UTILIDADES DE FORMATO ---
+    // --- UTILIDADES ---
     function formatCurrencyInput(input) {
         let val = input.value.replace(/\D/g, '');
         if (val === "") { input.value = ""; return; }
@@ -142,17 +140,13 @@
         return parseFloat(document.getElementById('amtDisplay').value.replace(/\./g, '')) || 0;
     }
 
-    // --- AUTO-DETECCIÓN DE ENCABEZADOS ---
     function detectMonthHeaders(sampleRow) {
         if(!sampleRow) return;
         const keys = Object.keys(sampleRow);
-        
         MONTH_POSSIBILITIES.forEach((possibles, idx) => {
-            // Buscamos cuál de las posibilidades existe en las llaves del objeto
             const found = keys.find(k => possibles.includes(k.trim().toUpperCase()));
             if(found) DETECTED_HEADERS[idx] = found;
         });
-        console.log("Encabezados detectados:", DETECTED_HEADERS);
     }
 
     async function syncData() {
@@ -160,8 +154,6 @@
         try {
             const resB = await fetch(`${API_URL}?sheet=Presupuesto`);
             budget = await resB.json();
-            
-            // DETECTAR ENCABEZADOS REALES APENAS LLEGAN LOS DATOS
             if(budget.length > 0) detectMonthHeaders(budget[0]);
 
             const resE = await fetch(`${API_URL}?sheet=Gastos`);
@@ -181,17 +173,14 @@
         const ref = document.getElementById('ref').value;
         const monthIdx = parseInt(dateStr.split('-')[1]) - 1;
 
-        // Buscar linea de presupuesto
         const line = budget.find(b => (b.CODIGO||b.Codigo||b.codigo) == code);
         if (!line) return alert("Código no encontrado");
 
-        // Obtener valor usando el encabezado detectado
         const header = DETECTED_HEADERS[monthIdx];
         let rawBud = header ? line[header] : "0";
         if(typeof rawBud === 'string') rawBud = rawBud.replace(/\./g,'').replace(/,/g,'.');
         const budgetMonth = parseFloat(rawBud) || 0;
 
-        // Calcular gastado
         let spentMonth = 0;
         expenses.forEach(x => {
             if (x.code == code && (parseInt(x.date.split('-')[1])-1) == monthIdx) {
@@ -244,52 +233,56 @@
 
     function closeModal() {
         document.getElementById('alertModal').style.display = 'none';
-        pendingExpense = null;
+        // NO borramos pendingExpense aquí para no perder los datos
     }
 
-    // --- EJECUCIÓN DEL TRASLADO ---
+    // --- EJECUCIÓN DEL TRASLADO (CORREGIDO: COPIA DE DATOS) ---
     async function executeTransfer() {
         if(!pendingExpense) return;
+        
+        // 1. Copia de seguridad de los datos antes de cerrar
+        const transferData = { ...pendingExpense };
         const sourceIdx = document.getElementById('modalSourceMonth').value;
+        
         if(isNaN(sourceIdx)) return alert("Selecciona un mes");
 
-        const targetIdx = pendingExpense.monthIdx;
-        const amount = pendingExpense.missing;
-        const code = pendingExpense.code;
+        closeModal(); // Ahora sí cerramos
+        pendingExpense = null; // Limpiamos global
 
-        // USAMOS LOS ENCABEZADOS DETECTADOS (ESTO ES LO QUE FALLABA ANTES)
+        const targetIdx = transferData.monthIdx;
+        const amount = transferData.missing;
+        const code = transferData.code;
+
         const colSource = DETECTED_HEADERS[sourceIdx];
         const colTarget = DETECTED_HEADERS[targetIdx];
 
-        if(!colSource || !colTarget) return alert("Error: No se identificaron los nombres de columna en la BD.");
+        if(!colSource || !colTarget) return alert("Error: No se identificaron columnas en la BD.");
 
         document.getElementById('loader').style.display = 'flex';
-        closeModal();
 
         try {
             const line = budget.find(b => (b.CODIGO||b.Codigo) == code);
             
-            // Valores actuales
             let valSource = parseFloat(String(line[colSource]).replace(/\./g,'').replace(/,/g,'.')) || 0;
             let valTarget = parseFloat(String(line[colTarget]).replace(/\./g,'').replace(/,/g,'.')) || 0;
 
-            // Nuevos valores
             const updateData = {};
             updateData[colSource] = valSource - amount;
             updateData[colTarget] = valTarget + amount;
 
-            // Llave primaria para el update (CODIGO o Codigo)
             const codeKey = Object.keys(line).find(k => k.toUpperCase() === "CODIGO") || "CODIGO";
 
-            // PATCH a SheetDB
-            await fetch(`${API_URL}/${codeKey}/${code}?sheet=Presupuesto`, {
+            // PATCH SheetDB
+            const res = await fetch(`${API_URL}/${codeKey}/${encodeURIComponent(code)}?sheet=Presupuesto`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ data: updateData })
             });
 
-            // Guardar el gasto
-            await saveExpense(code, pendingExpense.ref, pendingExpense.amount, pendingExpense.date, false);
+            if(!res.ok) throw new Error("Error SheetDB: " + res.status);
+
+            // Guardar gasto usando la COPIA de los datos
+            await saveExpense(code, transferData.ref, transferData.amount, transferData.date, false);
             
             alert("✅ Traslado realizado con éxito.");
             syncData();
@@ -302,6 +295,7 @@
 
     async function saveExpense(code, ref, amount, date, hideLoader=true) {
         if(hideLoader) document.getElementById('loader').style.display = 'flex';
+        
         const data = { id: Date.now(), code, ref, amount, date };
 
         await fetch(`${API_URL}?sheet=Gastos`, {
