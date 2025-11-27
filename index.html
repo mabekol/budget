@@ -78,6 +78,7 @@
         <div class="card">
             <h2>Registrar Gasto</h2>
             <form onsubmit="tryAddExpense(event)">
+                <label>Usuario</label><input type="text" id="uName" required placeholder="Tu nombre">
                 <label>Código</label><select id="selCode" required><option>Cargando...</option></select>
                 <label>Referencia</label><input type="text" id="ref" required>
                 <div style="display:flex; gap:10px">
@@ -91,7 +92,7 @@
         <div class="card">
             <h2>Últimos Movimientos (Gastos)</h2>
             <div class="table-wrap" style="max-height:300px">
-                <table id="histTable"><thead><tr><th>Fecha</th><th>Ref</th><th>Monto</th><th></th></tr></thead><tbody></tbody></table>
+                <table id="histTable"><thead><tr><th>Fecha</th><th>Usuario</th><th>Ref</th><th>Monto</th><th></th></tr></thead><tbody></tbody></table>
             </div>
         </div>
     </div>
@@ -126,6 +127,8 @@
     let pendingExpense = null;
 
     document.addEventListener('DOMContentLoaded', () => {
+        const u = localStorage.getItem('u');
+        if(u) document.getElementById('uName').value = u;
         document.getElementById('date').valueAsDate = new Date();
         syncData();
     });
@@ -139,6 +142,8 @@
     function getAmountValue() {
         return parseFloat(document.getElementById('amtDisplay').value.replace(/\./g, '')) || 0;
     }
+    
+    // Búsqueda inteligente que arregla el problema de "undefined"
     function getSmartValue(obj, keys) {
         if(!obj) return undefined;
         const objKeys = Object.keys(obj);
@@ -148,6 +153,7 @@
         }
         return undefined;
     }
+
     function detectMonthHeaders(sampleRow) {
         if(!sampleRow) return;
         const keys = Object.keys(sampleRow);
@@ -201,7 +207,7 @@
             pendingExpense = { 
                 code, amount, date: dateStr, ref, monthIdx, 
                 missing: amount - (budgetMonth - spentMonth),
-                user: localStorage.getItem('u') || "WebUser"
+                user: document.getElementById('uName').value
             };
             openModal(line, monthIdx, pendingExpense.missing);
         } else {
@@ -284,14 +290,14 @@
                 body: JSON.stringify({ data: updateData })
             });
 
-            // B. Registrar el TRASLADO en la hoja "Traslados" (NUEVO)
+            // B. Registrar el TRASLADO en la hoja "Traslados" (NO en Gastos)
             const logData = {
-                Fecha: new Date().toISOString().split('T')[0],
-                Codigo: transferData.code,
-                Origen: colSource,
-                Destino: colTarget,
-                Valor: transferData.missing,
-                Usuario: transferData.user
+                "Fecha": new Date().toISOString().split('T')[0],
+                "Codigo": transferData.code,
+                "Origen": colSource,
+                "Destino": colTarget,
+                "Valor": transferData.missing,
+                "Usuario": transferData.user
             };
             
             await fetch(`${API_URL}?sheet=Traslados`, {
@@ -300,11 +306,13 @@
                 body: JSON.stringify({ data: [logData] })
             });
 
-            // C. Guardar el Gasto en "Gastos"
+            // C. Guardar el Gasto NORMAL (Ahora que ya hay fondos)
             document.getElementById('loadMsg').innerText = "Guardando gasto...";
-            await saveExpense(transferData.code, transferData.ref, transferData.amount, transferData.date, false);
+            // Aquí está la clave: al guardar el gasto normal, este se va a la hoja Gastos
+            // y aparecerá en el historial. El traslado NO aparecerá en el historial web.
+            await saveExpense(transferData.code, transferData.ref, transferData.amount, transferData.date, false, transferData.user);
             
-            alert("✅ Traslado y Gasto registrados exitosamente.");
+            alert("✅ Traslado y Gasto registrados correctamente.");
             syncData();
 
         } catch (e) {
@@ -314,18 +322,20 @@
     }
 
     // --- GUARDAR GASTO ---
-    async function saveExpense(code, ref, amount, date, hideLoader=true) {
+    async function saveExpense(code, ref, amount, date, hideLoader=true, explicitUser=null) {
         if(hideLoader) document.getElementById('loader').style.display = 'flex';
         
-        const user = "Usuario Web"; 
+        const user = explicitUser || document.getElementById('uName').value;
+        localStorage.setItem('u', user);
 
+        // Guardamos con nombres flexibles para asegurar que SheetDB encuentre la columna
         const rowData = {
             "id": Date.now(),
-            "code": code, "CODIGO": code,
-            "ref": ref, "Referencia": ref,
-            "amount": amount, "Monto": amount,
-            "date": date, "Fecha": date,
-            "user": user, "Usuario": user
+            "code": code, "CODIGO": code, "Codigo": code,
+            "ref": ref, "REFERENCIA": ref, "Referencia": ref,
+            "amount": amount, "MONTO": amount, "Monto": amount,
+            "date": date, "FECHA": date, "Fecha": date,
+            "user": user, "USUARIO": user, "Usuario": user
         };
 
         try {
@@ -337,14 +347,23 @@
 
             if (!res.ok) throw new Error("Error al guardar en Gastos");
 
-            expenses.push({ id: rowData.id, code, ref, amount, date, user });
+            // Actualizamos localmente para ver el cambio inmediato
+            // Aquí usamos nombres estándar para el JS
+            expenses.push({ 
+                id: rowData.id, 
+                code: code, 
+                ref: ref, 
+                amount: amount, 
+                date: date, 
+                user: user 
+            });
             
             if(hideLoader) {
                 renderUI();
                 document.getElementById('ref').value = "";
                 document.getElementById('amtDisplay').value = "";
                 document.getElementById('loader').style.display = 'none';
-                alert("✅ Gasto registrado.");
+                alert("✅ Guardado");
             }
         } catch(e) {
             if(hideLoader) { 
@@ -367,6 +386,7 @@
 
     function renderUI() {
         const sel = document.getElementById('selCode');
+        const cur = sel.value;
         sel.innerHTML = '<option value="">-- Seleccionar --</option>';
         
         budget.forEach(b => {
@@ -379,6 +399,7 @@
                 sel.appendChild(o);
             }
         });
+        sel.value = cur;
 
         const expMap = {};
         let tSpent = 0;
@@ -399,7 +420,6 @@
             const code = getSmartValue(l, ["CODIGO","Codigo"]);
             if(!code) return;
             
-            let total = Number(getSmartValue(l, ["TOTAL","Total"])||0);
             const tr = document.createElement('tr');
             let h = `<td><b>${code}</b></td>`;
             let rowSum = 0;
@@ -415,6 +435,7 @@
                 let color = s > b ? 'red' : (s > 0 ? '#27ae60' : '#ccc');
                 h += `<td>${b?fmt(b):'-'}<br><span style="color:${color};font-weight:bold;font-size:0.85em">${s?fmt(s):''}</span></td>`;
             }
+            let total = Number(l.TOTAL || l.Total || 0);
             if(total===0) total = rowSum;
             tBud += total;
             h += `<td><b>${fmt(total)}</b></td>`;
@@ -428,9 +449,11 @@
 
         const th = document.querySelector('#histTable tbody');
         th.innerHTML = '';
-        [...expenses].sort((a,b)=>b.id-a.id).slice(0,10).forEach(x => {
+        [...expenses].sort((a,b)=>getSmartValue(b, ["id","ID"]) - getSmartValue(a, ["id","ID"])).slice(0,10).forEach(x => {
             const r = document.createElement('tr');
-            r.innerHTML = `<td>${x.date}</td><td>${x.ref}</td><td class="money">${fmt(x.amount)}</td><td><button class="danger" onclick="delExp(${x.id})">x</button></td>`;
+            const id = getSmartValue(x, ["id","ID"]);
+            const user = getSmartValue(x, ["user","User","Usuario","USUARIO"]) || "?";
+            r.innerHTML = `<td>${getSmartValue(x,["date","fecha"])}</td><td><small>${user}</small></td><td>${getSmartValue(x,["ref","referencia"])}</td><td class="money">${fmt(getSmartValue(x,["amount","monto"]))}</td><td><button class="danger" onclick="delExp(${id})">x</button></td>`;
             th.appendChild(r);
         });
     }
