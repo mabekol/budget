@@ -70,31 +70,35 @@
     </style>
 </head>
 <body>
+
 <div id="loginScreen" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#002B5C; z-index:9999; display:flex; flex-direction:column; justify-content:center; align-items:center; color:white;">
-    <h1 style="color:#00A3E0">Saint Aubin <span style="color:white">Intranet</span></h1>
-    <p>Ingreso exclusivo personal autorizado</p>
-    <input type="password" id="passInput" placeholder="Contraseña de acceso" style="width:250px; text-align:center; margin-top:10px;">
-    <button onclick="checkPass()" style="margin-top:15px; background:#00A3E0; color:white; border:none; padding:10px 30px; font-weight:bold; cursor:pointer;">ENTRAR</button>
-    <p id="loginMsg" style="color:#ff6b6b; margin-top:10px; display:none;">Contraseña Incorrecta</p>
+    <h1 style="color:#00A3E0; margin-bottom:10px;">Saint Aubin <span style="color:white">Intranet</span></h1>
+    <p style="opacity:0.8; margin-bottom:20px;">Ingreso exclusivo personal autorizado</p>
+    <input type="password" id="passInput" placeholder="Contraseña de acceso" style="width:250px; text-align:center; padding:15px; border-radius:30px; border:none;">
+    <button onclick="checkPass()" style="margin-top:20px; background:#00A3E0; color:white; border:none; padding:12px 40px; font-weight:bold; cursor:pointer; border-radius:30px; transition:0.3s;">ENTRAR</button>
+    <p id="loginMsg" style="color:#ff6b6b; margin-top:15px; display:none; font-weight:bold;">⚠️ Contraseña Incorrecta</p>
 </div>
 
 <script>
     function checkPass() {
         const p = document.getElementById('passInput').value;
-        // CAMBIA '1234' POR TU CONTRASEÑA DESEADA
         if(p === "SaintAubin2025") {
             document.getElementById('loginScreen').style.display = 'none';
-            localStorage.setItem('auth', 'true'); // Recordar sesión
+            localStorage.setItem('auth', 'true');
         } else {
             document.getElementById('loginMsg').style.display = 'block';
         }
     }
-    
-    // Si ya ingresó antes, no pedir clave de nuevo
+    function logout() {
+        localStorage.removeItem('auth');
+        location.reload();
+    }
+    // Verificar si ya está logueado
     if(localStorage.getItem('auth') === 'true') {
         document.getElementById('loginScreen').style.display = 'none';
     }
 </script>
+
 <div id="loader">
     <div class="spinner"></div>
     <h3 style="color:var(--primary)">Procesando...</h3>
@@ -125,7 +129,10 @@
         <div class="brand">
             <h1>Saint Aubin <span>International</span></h1>
         </div>
-        <button onclick="syncData(true)" class="primary">🔄 Actualizar Datos</button>
+        <div style="display:flex; gap:10px;">
+            <button onclick="syncData(true)" class="primary">🔄 Actualizar</button>
+            <button onclick="logout()" style="background:#BDC3C7; color:#555;">🔒 Salir</button>
+        </div>
     </div>
 
     <div class="card kpi-box">
@@ -289,267 +296,4 @@
         }
 
         const header = DETECTED_HEADERS[monthIdx];
-        let rawBud = header ? line[header] : "0";
-        if(typeof rawBud === 'string') rawBud = rawBud.replace(/\./g,'').replace(/,/g,'.');
-        const budgetMonth = parseFloat(rawBud) || 0;
-
-        let spentMonth = 0;
-        expenses.forEach(x => {
-            const xCode = getSmartValue(x, ["code", "Code", "Codigo", "CODIGO"]);
-            const xDate = getSmartValue(x, ["date", "Date", "Fecha", "FECHA"]);
-            const xAmt = parseFloat(getSmartValue(x, ["amount", "Amount", "Monto", "MONTO"])) || 0;
-
-            if (xCode == code && xDate && (parseInt(xDate.split('-')[1])-1) == monthIdx) {
-                spentMonth += xAmt;
-            }
-        });
-
-        if (amount > (budgetMonth - spentMonth)) {
-            const missing = amount - (budgetMonth - spentMonth);
-            pendingExpense = { 
-                code, amount, date: dateStr, ref, monthIdx, missing,
-                user: document.getElementById('uName').value
-            };
-            openModal(line, monthIdx, pendingExpense.missing);
-            btn.disabled = false; btn.innerText = "Validar Disponibilidad";
-        } else {
-            saveExpense(code, ref, amount, dateStr);
-        }
-    }
-
-    function openModal(line, targetIdx, missing) {
-        const select = document.getElementById('modalSourceMonth');
-        document.getElementById('modalTargetMonth').innerText = MONTH_LABELS[targetIdx];
-        document.getElementById('modalMissing').innerText = fmt(missing);
-        select.innerHTML = '';
-        
-        DETECTED_HEADERS.forEach((header, idx) => {
-            if (idx === targetIdx || !header) return;
-            let rawBud = line[header] || "0";
-            if(typeof rawBud === 'string') rawBud = rawBud.replace(/\./g,'').replace(/,/g,'.');
-            const bud = parseFloat(rawBud) || 0;
-            
-            let spent = 0;
-            const codeVal = getSmartValue(line, ["CODIGO"]);
-            expenses.forEach(x => {
-                const xCode = getSmartValue(x, ["code", "Code", "Codigo", "CODIGO"]);
-                const xDate = getSmartValue(x, ["date", "Date", "Fecha", "FECHA"]);
-                const xAmt = parseFloat(getSmartValue(x, ["amount", "Amount", "Monto", "MONTO"])) || 0;
-                if (xCode == codeVal && xDate && (parseInt(xDate.split('-')[1])-1) == idx) {
-                    spent += xAmt;
-                }
-            });
-
-            if ((bud - spent) >= missing) {
-                const opt = document.createElement('option');
-                opt.value = idx;
-                opt.text = `${MONTH_LABELS[idx]} (Disp: ${fmt(bud-spent)})`;
-                select.appendChild(opt);
-            }
-        });
-
-        if (select.options.length === 0) select.innerHTML = '<option>⛔ Sin fondos</option>';
-        document.getElementById('alertModal').style.display = 'flex';
-    }
-
-    function closeModal() {
-        document.getElementById('alertModal').style.display = 'none';
-        pendingExpense = null;
-    }
-
-    async function executeTransfer() {
-        if(!pendingExpense) return;
-        
-        const transferData = { ...pendingExpense };
-        const sourceIdx = document.getElementById('modalSourceMonth').value;
-        
-        if(isNaN(sourceIdx)) return alert("Selecciona un mes origen");
-
-        closeModal();
-        pendingExpense = null;
-
-        const colSource = DETECTED_HEADERS[sourceIdx];
-        const colTarget = DETECTED_HEADERS[transferData.monthIdx];
-
-        document.getElementById('loader').style.display = 'flex';
-        document.getElementById('loadMsg').innerText = "Registrando traslado...";
-
-        try {
-            const line = budget.find(b => getSmartValue(b, ["CODIGO"]) == transferData.code);
-            let valSource = parseFloat(String(line[colSource]).replace(/\./g,'').replace(/,/g,'.')) || 0;
-            let valTarget = parseFloat(String(line[colTarget]).replace(/\./g,'').replace(/,/g,'.')) || 0;
-
-            const updateData = {};
-            updateData[colSource] = valSource - transferData.missing;
-            updateData[colTarget] = valTarget + transferData.missing;
-            const codeKey = Object.keys(line).find(k => k.toUpperCase() === "CODIGO") || "CODIGO";
-
-            await fetch(`${API_URL}/${codeKey}/${encodeURIComponent(transferData.code)}?sheet=Presupuesto`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data: updateData })
-            });
-
-            const logData = {
-                "Fecha": new Date().toISOString().split('T')[0],
-                "Codigo": transferData.code,
-                "Origen": colSource,
-                "Destino": colTarget,
-                "Valor": transferData.missing,
-                "Usuario": transferData.user
-            };
-            await fetch(`${API_URL}?sheet=Traslados`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data: [logData] })
-            });
-
-            document.getElementById('loadMsg').innerText = "Guardando gasto...";
-            await saveExpense(transferData.code, transferData.ref, transferData.amount, transferData.date, false, transferData.user);
-            
-            alert("✅ Traslado realizado correctamente.");
-            syncData(true);
-
-        } catch (e) {
-            alert("Error: " + e.message);
-            document.getElementById('loader').style.display = 'none';
-        }
-    }
-
-    async function saveExpense(code, ref, amount, date, hideLoader=true, explicitUser=null) {
-        if(hideLoader) document.getElementById('loader').style.display = 'flex';
-        
-        const user = explicitUser || document.getElementById('uName').value || "WebUser";
-        localStorage.setItem('u', user);
-
-        const rowData = {
-            "id": Date.now(),
-            "code": code, "CODIGO": code, "Codigo": code,
-            "ref": ref, "REFERENCIA": ref, "Referencia": ref,
-            "amount": amount, "MONTO": amount, "Monto": amount,
-            "date": date, "FECHA": date, "Fecha": date,
-            "user": user, "USUARIO": user, "Usuario": user
-        };
-
-        try {
-            const res = await fetch(`${API_URL}?sheet=Gastos`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data: [rowData] })
-            });
-
-            if (!res.ok) throw new Error("Error al guardar en Gastos");
-
-            if(hideLoader) {
-                await syncData(false); 
-                document.getElementById('ref').value = "";
-                document.getElementById('amtDisplay').value = "";
-                document.getElementById('loader').style.display = 'none';
-                
-                const btn = document.getElementById('btnSave');
-                btn.disabled = false; btn.innerText = "Validar Disponibilidad";
-                alert("✅ Gasto registrado.");
-            }
-        } catch(e) {
-            document.getElementById('loader').style.display = 'none';
-            const btn = document.getElementById('btnSave');
-            btn.disabled = false; btn.innerText = "Validar Disponibilidad";
-            if(hideLoader) alert("Error: " + e.message); else throw e;
-        }
-    }
-
-    async function delExp(id) {
-        if(!confirm("¿Borrar este registro?")) return;
-        document.getElementById('loader').style.display = 'flex';
-        try {
-            await fetch(`${API_URL}/id/${id}?sheet=Gastos`, { method: 'DELETE' });
-            await syncData(false);
-        } catch(e) { alert("Error: " + e.message); }
-        document.getElementById('loader').style.display = 'none';
-    }
-
-    function renderUI() {
-        const sel = document.getElementById('selCode');
-        const cur = sel.value;
-        sel.innerHTML = '<option value="">-- Seleccionar Rubro --</option>';
-        
-        budget.forEach(b => {
-            const code = getSmartValue(b, ["CODIGO","Codigo"]);
-            const desc = getSmartValue(b, ["DESCRIPCION","Descripcion"]) || "";
-            if(code) {
-                const o = document.createElement('option');
-                o.value = code;
-                o.text = `${code} - ${desc.substring(0,40)}`;
-                sel.appendChild(o);
-            }
-        });
-        if(cur) sel.value = cur;
-
-        const expMap = {};
-        let tSpent = 0;
-        expenses.forEach(x => {
-            const d = getSmartValue(x, ["date","Date","Fecha","FECHA"]);
-            if(!d) return;
-            const p = d.split('-');
-            const m = parseInt(p[1])-1;
-            const k = `${getSmartValue(x,["code","Code","CODIGO"])}-${m}`;
-            const val = parseFloat(getSmartValue(x, ["amount","Amount","Monto","MONTO"])) || 0;
-            expMap[k] = (expMap[k]||0) + val;
-            tSpent += val;
-        });
-
-        const tb = document.querySelector('#mainTable tbody');
-        tb.innerHTML = '';
-        let tBud = 0;
-
-        budget.forEach(l => {
-            const code = getSmartValue(l, ["CODIGO","Codigo"]);
-            if(!code) return;
-            
-            const tr = document.createElement('tr');
-            let h = `<td><b>${code}</b></td>`;
-            let rowSum = 0;
-            
-            for(let i=0; i<12; i++) {
-                const header = DETECTED_HEADERS[i];
-                let rawVal = header ? l[header] : "0";
-                if(typeof rawVal === 'string') rawVal = rawVal.replace(/\./g, '').replace(/,/g, '.');
-                let b = Number(rawVal) || 0;
-                rowSum += b;
-                
-                let s = expMap[`${code}-${i}`]||0;
-                let color = s > b ? '#e74c3c' : (s > 0 ? '#27ae60' : '#95a5a6');
-                h += `<td>${b?fmt(b):'-'}<br><span style="color:${color};font-weight:bold;font-size:0.85em">${s?fmt(s):''}</span></td>`;
-            }
-            let total = Number(getSmartValue(l, ["TOTAL","Total"])||0);
-            if(total===0) total = rowSum;
-            tBud += total;
-            h += `<td><b>${fmt(total)}</b></td>`;
-            tr.innerHTML = h;
-            tb.appendChild(tr);
-        });
-
-        document.getElementById('kTotal').innerText = fmt(tBud);
-        document.getElementById('kAvail').innerText = fmt(tBud-tSpent);
-        document.getElementById('kPerc').innerText = tBud>0 ? ((tSpent/tBud)*100).toFixed(1)+"%" : "0%";
-
-        const th = document.querySelector('#histTable tbody');
-        th.innerHTML = '';
-        [...expenses].sort((a,b)=>getSmartValue(b,["id"])-getSmartValue(a,["id"])).slice(0,10).forEach(x => {
-            const r = document.createElement('tr');
-            const d = getSmartValue(x, ["date","Date","Fecha","FECHA"]);
-            const u = getSmartValue(x, ["user","User","Usuario","USUARIO"]) || "-";
-            const rf = getSmartValue(x, ["ref","Ref","Referencia"]);
-            const am = getSmartValue(x, ["amount","Amount","Monto"]);
-            const id = getSmartValue(x, ["id","ID"]);
-            r.innerHTML = `<td>${d}</td><td>${u}</td><td>${rf}</td><td style="font-weight:bold">${fmt(am)}</td><td style="text-align:right"><button class="danger" onclick="delExp(${id})">×</button></td>`;
-            th.appendChild(r);
-        });
-    }
-
-    function fmt(n) { return new Intl.NumberFormat('es-CO', {maximumFractionDigits:0}).format(n); }
-</script>
-</body>
-</html>
-
-
+        let
