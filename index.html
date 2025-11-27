@@ -107,12 +107,23 @@
         localStorage.removeItem('auth');
         location.reload();
     }
-    if(localStorage.getItem('auth') === 'true') {
-        document.getElementById('loginScreen').style.display = 'none';
-    }
+    // Comprobación inicial segura
+    window.onload = function() {
+        if(localStorage.getItem('auth') === 'true') {
+            document.getElementById('loginScreen').style.display = 'none';
+            unlockApp();
+        }
+        
+        // Seguridad anti-pantalla blanca: Si falla algo, forzar visualización tras 3 segs
+        setTimeout(() => {
+            if(document.getElementById('loginScreen').style.display === 'none') {
+                document.getElementById('mainContainer').style.display = 'block';
+            }
+        }, 3000);
+    };
 </script>
 
-<div id="loader">
+<div id="loader" style="display:none;">
     <div class="spinner"></div>
     <h3 style="color:var(--primary)">Procesando...</h3>
     <p id="loadMsg" style="color:#7f8c8d">Conectando con base de datos segura...</p>
@@ -120,7 +131,7 @@
 
 <div id="alertModal" class="modal-overlay">
     <div class="modal">
-        <h3>⚠️ Presupuesto Insuficiente</h3>
+        <h3>⚠️ Saldo Insuficiente</h3>
         <p style="margin-bottom:5px;">El rubro no tiene fondos en <b id="modalTargetMonth" style="color:var(--primary)"></b>.</p>
         <p>Faltante: <b id="modalMissing" style="color:var(--danger); font-size:1.2em;"></b></p>
         
@@ -158,7 +169,7 @@
 
         <div class="kpi-container">
             <div class="kpi-card"><small>Presupuesto Total</small><div class="kpi-val" id="kTotal">$0</div></div>
-            <div class="kpi-card"><small>Disponible Real</small><div class="kpi-val" id="kAvail">$0</div></div>
+            <div class="kpi-card"><small>Disponible Real</small><div class="kpi-val" id="kAvail" style="color:var(--success)">$0</div></div>
             <div class="kpi-card"><small>% Ejecución</small><div class="kpi-val" id="kPerc" style="color:var(--accent)">0%</div></div>
         </div>
     </div>
@@ -179,7 +190,7 @@
                 <select id="selCode" required><option>Cargando códigos...</option></select>
                 
                 <label>Concepto / Referencia</label>
-                <input type="text" id="ref" placeholder="Ej: Factura 123" required>
+                <input type="text" id="ref" placeholder="Ej: Factura 123 - Compra Insumos" required>
                 
                 <div style="display:flex; gap:15px;">
                     <div style="flex:1">
@@ -228,11 +239,11 @@
 
                 <div style="display:flex; gap:10px;">
                     <div style="flex:1">
-                        <label>Origen</label>
+                        <label>Origen (Saca)</label>
                         <select id="monthSource" required></select>
                     </div>
                     <div style="flex:1">
-                        <label>Destino</label>
+                        <label>Destino (Pone)</label>
                         <select id="monthTarget" required></select>
                     </div>
                 </div>
@@ -264,7 +275,7 @@
 
     let budget = [], expenses = [], transfers = [];
     let DETECTED_HEADERS = new Array(12).fill(null); 
-    let myChart = null; 
+    let myChart = null;
     
     const MONTH_POSSIBILITIES = [
         ["ENERO","Enero","ENE","JAN","January"], ["FEBRERO","Febrero","FEB","February"], ["MARZO","Marzo","MAR","March"],
@@ -276,20 +287,14 @@
     let pendingExpense = null;
 
     function unlockApp() {
-        document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('mainContainer').style.display = 'block';
         const u = localStorage.getItem('u');
-        if(u) {
-             const uSelect = document.getElementById('uName');
-             if (u === "JIAT" || u === "MBR") uSelect.value = u;
+        if(u && (u === "JIAT" || u === "MBR")) {
+             document.getElementById('uName').value = u;
         }
         document.getElementById('date').valueAsDate = new Date();
         populateMonthSelects();
         syncData(true);
-    }
-
-    if(localStorage.getItem('auth') === 'true') {
-        document.addEventListener('DOMContentLoaded', unlockApp);
     }
 
     function populateMonthSelects() {
@@ -331,7 +336,7 @@
         });
     }
 
-    // --- EXCEL ---
+    // --- EXPORTAR A EXCEL ---
     function downloadExcel() {
         let csv = "Codigo,Ene,Feb,Mar,Abr,May,Jun,Jul,Ago,Sep,Oct,Nov,Dic,Total\n";
         budget.forEach(l => {
@@ -345,9 +350,10 @@
                 let bud = parseFloat(rawBud) || 0;
                 let spent = 0;
                 expenses.forEach(x => {
-                    if (x.code == code && (parseInt(x.date.split('-')[1])-1) == i) {
-                        spent += parseFloat(x.amount);
-                    }
+                    const c = getSmartValue(x, ["code","Code","CODIGO"]);
+                    const d = getSmartValue(x, ["date","Date","Fecha"]);
+                    const a = parseFloat(getSmartValue(x, ["amount","Amount","Monto","MONTO"])) || 0;
+                    if (c == code && d && (parseInt(d.split('-')[1])-1) == i) spent += a;
                 });
                 row.push(bud - spent); 
                 total += (bud - spent);
@@ -365,8 +371,11 @@
         document.body.removeChild(link);
     }
 
-    // --- CHART ---
+    // --- GRÁFICA ---
     function updateChart() {
+        // Seguridad: si Chart no carga, no fallamos
+        if (typeof Chart === 'undefined') return; 
+        
         const ctx = document.getElementById('budgetChart').getContext('2d');
         let dataBudget = new Array(12).fill(0);
         let dataSpent = new Array(12).fill(0);
@@ -408,6 +417,7 @@
             document.getElementById('loader').style.display = 'flex';
             document.getElementById('loadMsg').innerText = "Sincronizando...";
         }
+        
         let attempts = 0;
         let success = false;
         
@@ -415,91 +425,4 @@
             attempts++;
             try {
                 const ts = Date.now();
-                const resB = await fetch(`${API_URL}?sheet=Presupuesto&t=${ts}`);
-                budget = await resB.json();
-                if((!budget || budget.length === 0) && attempts === 1) throw new Error("Cold Start");
-                if(budget.length > 0) detectMonthHeaders(budget[0]);
-
-                const resE = await fetch(`${API_URL}?sheet=Gastos&t=${ts}`);
-                expenses = await resE.json();
-
-                const resT = await fetch(`${API_URL}?sheet=Traslados&t=${ts}`);
-                transfers = await resT.json();
-
-                renderUI();
-                updateChart();
-                success = true;
-            } catch (e) {
-                console.warn("Intento fallido:", e);
-                if(attempts === 1) await new Promise(r => setTimeout(r, 1500)); 
-            }
-        }
-        if(!success && showLoaderUI) alert("⚠️ No se pudieron cargar los datos.");
-        if(showLoaderUI) document.getElementById('loader').style.display = 'none';
-    }
-
-    // --- VALIDACIÓN ---
-    async function tryAddExpense(e) {
-        e.preventDefault();
-        const btn = document.getElementById('btnSave');
-        btn.disabled = true; btn.innerText = "Verificando...";
-        
-        await syncData(false); 
-
-        const code = document.getElementById('selCode').value;
-        const amount = getAmountValue('amtDisplay');
-        const dateStr = document.getElementById('date').value;
-        const ref = document.getElementById('ref').value;
-        const monthIdx = parseInt(dateStr.split('-')[1]) - 1;
-
-        const line = budget.find(b => getSmartValue(b, ["CODIGO","Codigo","Code"]) == code);
-        if (!line) { alert("Código no encontrado"); btn.disabled = false; btn.innerText = "Validar y Guardar"; return; }
-
-        const header = DETECTED_HEADERS[monthIdx];
-        let rawBud = header ? line[header] : "0";
-        if(typeof rawBud === 'string') rawBud = rawBud.replace(/\./g,'').replace(/,/g,'.');
-        const budgetMonth = parseFloat(rawBud) || 0;
-
-        let spentMonth = 0;
-        expenses.forEach(x => {
-            const xCode = getSmartValue(x, ["code", "Code", "Codigo", "CODIGO"]);
-            const xDate = getSmartValue(x, ["date", "Date", "Fecha", "FECHA"]);
-            const xAmt = parseFloat(getSmartValue(x, ["amount", "Amount", "Monto", "MONTO"])) || 0;
-            if (xCode == code && xDate && (parseInt(xDate.split('-')[1])-1) == monthIdx) spentMonth += xAmt;
-        });
-
-        if (amount > (budgetMonth - spentMonth)) {
-            const missing = amount - (budgetMonth - spentMonth);
-            alert(`⛔ SALDO INSUFICIENTE\n\nRubro: ${code}\nMes: ${MONTH_LABELS[monthIdx]}\nDisponible: ${fmt(budgetMonth - spentMonth)}\nFaltan: ${fmt(missing)}\n\nPor favor realiza un traslado en el Módulo de Traslados (abajo).`);
-            btn.disabled = false; btn.innerText = "Validar y Guardar";
-        } else {
-            saveExpense(code, ref, amount, dateStr);
-        }
-    }
-
-    // --- TRASLADOS ---
-    async function handleTransfer(e) {
-        e.preventDefault();
-        const code = document.getElementById('selCodeTransfer').value;
-        const sourceIdx = parseInt(document.getElementById('monthSource').value);
-        const targetIdx = parseInt(document.getElementById('monthTarget').value);
-        const amount = getAmountValue('amtTransfer');
-        const user = document.getElementById('uName').value;
-
-        if(isNaN(sourceIdx) || isNaN(targetIdx)) return alert("Selecciona meses válidos");
-        if(sourceIdx === targetIdx) return alert("Origen y Destino deben ser diferentes");
-        if(amount <= 0) return alert("Monto inválido");
-
-        document.getElementById('loader').style.display = 'flex';
-        
-        await syncData(false);
-        
-        const line = budget.find(b => getSmartValue(b, ["CODIGO","Codigo","Code"]) == code);
-        const colSource = DETECTED_HEADERS[sourceIdx];
-        const colTarget = DETECTED_HEADERS[targetIdx];
-        
-        if(!colSource || !colTarget) { document.getElementById('loader').style.display = 'none'; return alert("Error DB"); }
-
-        let rawBud = line[colSource] || "0";
-        if(typeof rawBud === 'string') rawBud = rawBud.replace(/\./g,'').replace(/,/g,'.');
-        const
+                const resB = await fetch(`${
