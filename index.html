@@ -70,7 +70,31 @@
     </style>
 </head>
 <body>
+<div id="loginScreen" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#002B5C; z-index:9999; display:flex; flex-direction:column; justify-content:center; align-items:center; color:white;">
+    <h1 style="color:#00A3E0">Saint Aubin <span style="color:white">Intranet</span></h1>
+    <p>Ingreso exclusivo personal autorizado</p>
+    <input type="password" id="passInput" placeholder="Contraseña de acceso" style="width:250px; text-align:center; margin-top:10px;">
+    <button onclick="checkPass()" style="margin-top:15px; background:#00A3E0; color:white; border:none; padding:10px 30px; font-weight:bold; cursor:pointer;">ENTRAR</button>
+    <p id="loginMsg" style="color:#ff6b6b; margin-top:10px; display:none;">Contraseña Incorrecta</p>
+</div>
 
+<script>
+    function checkPass() {
+        const p = document.getElementById('passInput').value;
+        // CAMBIA '1234' POR TU CONTRASEÑA DESEADA
+        if(p === "SaintAubin2025") {
+            document.getElementById('loginScreen').style.display = 'none';
+            localStorage.setItem('auth', 'true'); // Recordar sesión
+        } else {
+            document.getElementById('loginMsg').style.display = 'block';
+        }
+    }
+    
+    // Si ya ingresó antes, no pedir clave de nuevo
+    if(localStorage.getItem('auth') === 'true') {
+        document.getElementById('loginScreen').style.display = 'none';
+    }
+</script>
 <div id="loader">
     <div class="spinner"></div>
     <h3 style="color:var(--primary)">Procesando...</h3>
@@ -527,4 +551,5 @@
 </script>
 </body>
 </html>
+
 
