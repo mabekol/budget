@@ -130,8 +130,6 @@
         const u = localStorage.getItem('u');
         if(u) document.getElementById('uName').value = u;
         document.getElementById('date').valueAsDate = new Date();
-        
-        // INICIO ROBUSTO: Intentar conectar varias veces si falla
         syncData(true); 
     });
 
@@ -162,47 +160,36 @@
         });
     }
 
-    // --- SINCRONIZACIÓN "AUTO-DESPERTAR" ---
+    // --- SINCRONIZACIÓN ---
     async function syncData(showLoaderUI = false) {
-        if(showLoaderUI) document.getElementById('loader').style.display = 'flex';
-        
-        let attempts = 0;
-        let success = false;
-        const maxAttempts = 3; // Intentará 3 veces antes de rendirse
-
-        while(attempts < maxAttempts && !success) {
-            attempts++;
-            if(showLoaderUI) document.getElementById('loadMsg').innerText = `Conectando (Intento ${attempts}/${maxAttempts})...`;
-            
-            try {
-                // Timestamp para evitar caché viejo
-                const ts = Date.now();
-                const headers = { 'Cache-Control': 'no-cache' };
-
-                const resB = await fetch(`${API_URL}?sheet=Presupuesto&t=${ts}`, { headers });
-                const jsonB = await resB.json();
-                
-                // Si recibimos array vacio o error, lanzamos excepcion para reintentar
-                if(!Array.isArray(jsonB) || jsonB.length === 0) throw new Error("Datos vacíos");
-
-                budget = jsonB;
-                detectMonthHeaders(budget[0]);
-
-                const resE = await fetch(`${API_URL}?sheet=Gastos&t=${ts}`, { headers });
-                expenses = await resE.json();
-
-                success = true; // ¡Éxito! Salimos del bucle
-                renderUI();
-
-            } catch (e) {
-                console.warn(`Intento ${attempts} fallido: ${e.message}`);
-                // Esperar 1.5 segundos antes de reintentar
-                if(attempts < maxAttempts) await new Promise(r => setTimeout(r, 1500));
-            }
+        if(showLoaderUI) {
+            document.getElementById('loader').style.display = 'flex';
+            document.getElementById('loadMsg').innerText = "Conectando...";
         }
+        
+        try {
+            const ts = Date.now() + Math.random();
+            const resB = await fetch(`${API_URL}?sheet=Presupuesto&t=${ts}`);
+            budget = await resB.json();
+            
+            // Reintento si está vacío
+            if(budget.length === 0) {
+                if(showLoaderUI) {
+                    document.getElementById('loadMsg').innerText = "Despertando base de datos...";
+                    setTimeout(() => syncData(showLoaderUI), 1500);
+                    return;
+                }
+            }
 
-        if(!success && showLoaderUI) {
-            alert("⚠️ El servidor está dormido o lento. Por favor presiona 'Actualizar' nuevamente.");
+            if(budget.length > 0) detectMonthHeaders(budget[0]);
+
+            const resE = await fetch(`${API_URL}?sheet=Gastos&t=${ts}`);
+            expenses = await resE.json();
+
+            renderUI();
+        } catch (e) { 
+            console.error(e); 
+            if(showLoaderUI) alert("Error conectando: " + e.message); 
         }
         
         if(showLoaderUI) document.getElementById('loader').style.display = 'none';
@@ -211,10 +198,10 @@
     // --- VALIDACIÓN ---
     async function tryAddExpense(e) {
         e.preventDefault();
-        const btn = document.getElementById('btnSave');
+        const btn = e.target.querySelector('button[type="submit"]');
         btn.disabled = true; btn.innerText = "Verificando...";
         
-        await syncData(true); // Recarga obligatoria
+        await syncData(false); // Recarga silenciosa
 
         const code = document.getElementById('selCode').value;
         const amount = getAmountValue();
@@ -237,8 +224,12 @@
 
         let spentMonth = 0;
         expenses.forEach(x => {
-            if (x.code == code && (parseInt(x.date.split('-')[1])-1) == monthIdx) {
-                spentMonth += parseFloat(x.amount);
+            const xCode = getSmartValue(x, ["code", "Code", "Codigo", "CODIGO"]);
+            const xDate = getSmartValue(x, ["date", "Date", "Fecha", "FECHA"]);
+            const xAmt = parseFloat(getSmartValue(x, ["amount", "Amount", "Monto", "MONTO"])) || 0;
+
+            if (xCode == code && (parseInt(xDate.split('-')[1])-1) == monthIdx) {
+                spentMonth += xAmt;
             }
         });
 
@@ -268,10 +259,15 @@
             const bud = parseFloat(rawBud) || 0;
             
             let spent = 0;
-            const codeVal = getSmartValue(line, ["CODIGO"]);
+            const codeVal = getSmartValue(line, ["CODIGO","Codigo"]);
+            
             expenses.forEach(x => {
-                if (x.code == codeVal && (parseInt(x.date.split('-')[1])-1) == idx) {
-                    spent += parseFloat(x.amount);
+                const xCode = getSmartValue(x, ["code", "Code", "Codigo", "CODIGO"]);
+                const xDate = getSmartValue(x, ["date", "Date", "Fecha", "FECHA"]);
+                const xAmt = parseFloat(getSmartValue(x, ["amount", "Amount", "Monto", "MONTO"])) || 0;
+
+                if (xCode == codeVal && (parseInt(xDate.split('-')[1])-1) == idx) {
+                    spent += xAmt;
                 }
             });
 
@@ -289,17 +285,16 @@
 
     function closeModal() {
         document.getElementById('alertModal').style.display = 'none';
+        pendingExpense = null;
     }
 
     // --- TRASLADO ---
     async function executeTransfer() {
         if(!pendingExpense) return;
-        
-        const transferData = { ...pendingExpense };
         const sourceIdx = document.getElementById('modalSourceMonth').value;
-        
         if(isNaN(sourceIdx)) return alert("Selecciona un mes");
 
+        const transferData = { ...pendingExpense };
         closeModal();
         pendingExpense = null;
 
@@ -310,7 +305,7 @@
         document.getElementById('loadMsg').innerText = "Registrando traslado...";
 
         try {
-            const line = budget.find(b => getSmartValue(b, ["CODIGO"]) == transferData.code);
+            const line = budget.find(b => getSmartValue(b, ["CODIGO","Codigo"]) == transferData.code);
             let valSource = parseFloat(String(line[colSource]).replace(/\./g,'').replace(/,/g,'.')) || 0;
             let valTarget = parseFloat(String(line[colTarget]).replace(/\./g,'').replace(/,/g,'.')) || 0;
 
@@ -353,7 +348,10 @@
 
     // --- GUARDAR GASTO ---
     async function saveExpense(code, ref, amount, date, hideLoader=true, explicitUser=null) {
-        if(hideLoader) document.getElementById('loader').style.display = 'flex';
+        if(hideLoader) {
+            document.getElementById('loader').style.display = 'flex';
+            document.getElementById('loadMsg').innerText = "Enviando a la nube...";
+        }
         
         const user = explicitUser || document.getElementById('uName').value || "WebUser";
         localStorage.setItem('u', user);
@@ -377,14 +375,13 @@
             if (!res.ok) throw new Error("Error al guardar");
 
             if(hideLoader) {
-                await syncData(false);
+                await syncData(true);
                 document.getElementById('ref').value = "";
                 document.getElementById('amtDisplay').value = "";
-                document.getElementById('loader').style.display = 'none';
                 
                 const btn = document.getElementById('btnSave');
                 btn.disabled = false; btn.innerText = "Validar y Guardar";
-
+                
                 alert("✅ Guardado Correctamente");
             }
         } catch(e) {
@@ -401,7 +398,7 @@
         document.getElementById('loader').style.display = 'flex';
         try {
             await fetch(`${API_URL}/id/${id}?sheet=Gastos`, { method: 'DELETE' });
-            await syncData(false);
+            await syncData(true);
         } catch(e) { alert("Error: " + e.message); }
         document.getElementById('loader').style.display = 'none';
     }
@@ -425,12 +422,16 @@
         const expMap = {};
         let tSpent = 0;
         expenses.forEach(x => {
-            if(!x.date) return;
-            const p = x.date.split('-');
+            const d = getSmartValue(x, ["date","Date","Fecha","FECHA"]);
+            if(!d) return;
+            const p = d.split('-');
             const m = parseInt(p[1])-1;
-            const k = `${x.code}-${m}`;
-            expMap[k] = (expMap[k]||0) + Number(x.amount);
-            tSpent += Number(x.amount);
+            const c = getSmartValue(x, ["code","Code","Codigo","CODIGO"]);
+            const a = parseFloat(getSmartValue(x, ["amount","Amount","Monto","MONTO"])) || 0;
+            
+            const k = `${c}-${m}`;
+            expMap[k] = (expMap[k]||0) + a;
+            tSpent += a;
         });
 
         const tb = document.querySelector('#mainTable tbody');
@@ -456,7 +457,7 @@
                 let color = s > b ? 'red' : (s > 0 ? '#27ae60' : '#ccc');
                 h += `<td>${b?fmt(b):'-'}<br><span style="color:${color};font-weight:bold;font-size:0.85em">${s?fmt(s):''}</span></td>`;
             }
-            let total = Number(l.TOTAL || l.Total || 0);
+            let total = Number(getSmartValue(l, ["TOTAL","Total"])||0);
             if(total===0) total = rowSum;
             tBud += total;
             h += `<td><b>${fmt(total)}</b></td>`;
@@ -470,9 +471,15 @@
 
         const th = document.querySelector('#histTable tbody');
         th.innerHTML = '';
-        [...expenses].sort((a,b)=>b.id-a.id).slice(0,10).forEach(x => {
+        // Ordenar por ID descendente
+        [...expenses].sort((a,b)=>getSmartValue(b,["id"])-getSmartValue(a,["id"])).slice(0,10).forEach(x => {
             const r = document.createElement('tr');
-            r.innerHTML = `<td>${x.date}</td><td>${x.ref}</td><td class="money">${fmt(x.amount)}</td><td><button class="danger" onclick="delExp(${x.id})">x</button></td>`;
+            const d = getSmartValue(x, ["date","Date","Fecha","FECHA"]);
+            const rf = getSmartValue(x, ["ref","Ref","Referencia"]);
+            const am = getSmartValue(x, ["amount","Amount","Monto"]);
+            const id = getSmartValue(x, ["id","ID"]);
+            
+            r.innerHTML = `<td>${d}</td><td>${rf}</td><td class="money">${fmt(am)}</td><td><button class="danger" onclick="delExp(${id})">x</button></td>`;
             th.appendChild(r);
         });
     }
