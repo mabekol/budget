@@ -10,10 +10,10 @@
         /* === ESTILOS G&C === */
         :root {
             --primary: #002B5C; --accent: #00A3E0; --bg: #F4F7FA; --white: #fff; 
-            --danger: #D32F2F; --success: #2E7D32; --warning: #F39C12; --dark: #2C3E50;
+            --danger: #D32F2F; --success: #2E7D32; --warning: #F39C12; --text: #2C3E50;
         }
         
-        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); padding: 20px; color: var(--dark); font-size:14px; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); padding: 20px; color: var(--text); font-size:14px; }
         .container { max-width: 1300px; margin: 0 auto; }
         
         /* HEADER */
@@ -66,8 +66,8 @@
         .tooltip-text { visibility: hidden; width: 250px; background-color: #002B5C; color: #fff; text-align: left; border-radius: 6px; padding: 10px; position: absolute; z-index: 100; bottom: 125%; left: 50%; margin-left: -125px; opacity: 0; transition: opacity 0.3s; font-size: 0.85em; font-weight: normal; box-shadow: 0 5px 15px rgba(0,0,0,0.3); line-height: 1.4; }
         .tooltip-text::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #002B5C transparent transparent transparent; }
         .tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; }
-
-        /* STATUS BADGES & PROGRESS */
+        
+        /* STATUS & BADGES */
         .status-badge { padding: 4px 10px; border-radius: 12px; font-size: 0.75em; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block; }
         .status-committed { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; } 
         .status-paid { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
@@ -103,7 +103,9 @@
             document.getElementById('loginScreen').style.display = 'none';
             localStorage.setItem('auth', 'true');
             unlockApp();
-        } else { document.getElementById('loginMsg').style.display = 'block'; }
+        } else {
+            document.getElementById('loginMsg').style.display = 'block';
+        }
     }
     function logout() { localStorage.removeItem('auth'); location.reload(); }
     window.onload = function() {
@@ -166,13 +168,15 @@
                     <div style="flex:1;"><label>Solicitante</label><select id="uName" required><option value="JIAT" selected>JIAT</option><option value="MBR">MBR</option></select></div>
                     <div style="flex:1;"><label>Estado</label><select id="status" required><option value="OC">Orden de Compra</option><option value="PAGADO">Factura / Pagado</option></select></div>
                 </div>
+                
                 <label>Rubro</label><select id="selCode" required><option>Cargando...</option></select>
-                <label>Referencia</label><input type="text" id="ref" placeholder="Ej: Factura 123" required>
+                <label>Referencia</label><input type="text" id="ref" placeholder="Ej: OC-1001" required>
+                
                 <div style="display:flex; gap:15px;">
                     <div style="flex:1"><label>Monto ($)</label><input type="text" id="amtDisplay" placeholder="0" required oninput="formatCurrencyInput(this)"></div>
                     <div style="flex:1"><label>Fecha</label><input type="date" id="date" required></div>
                 </div>
-                <button type="submit" id="btnSave" class="accent">Validar</button>
+                <button type="submit" id="btnSave" class="accent">Validar Disponibilidad</button>
             </form>
         </div>
         <div class="card">
@@ -224,13 +228,10 @@
                 <div class="progress-bg"><div class="progress-fill" id="dProgress"></div></div>
                 <div style="text-align:right; font-weight:bold; color:var(--primary)" id="dPercText">0%</div>
             </div>
-            
-            <div class="detail-subtitle">📉 Gastos Ejecutados</div>
             <div class="table-wrap" style="max-height:250px;">
                 <table id="detailTable"><thead><tr><th>Fecha</th><th>Ref</th><th>Solicitante</th><th>Monto</th><th>Estado</th></tr></thead><tbody></tbody></table>
             </div>
-            
-            <div class="detail-subtitle" style="margin-top:20px;">🔄 Historial de Traslados</div>
+            <div class="detail-subtitle" style="margin-top:20px; border-bottom:1px solid #eee; font-weight:bold; color:var(--warning);">🔄 Historial de Traslados</div>
             <div class="table-wrap" style="max-height:200px;">
                 <table id="detailTransfersTable"><thead><tr><th>Fecha</th><th>Movimiento</th><th>Valor</th><th>Usuario</th></tr></thead><tbody></tbody></table>
             </div>
@@ -248,7 +249,7 @@
     let DETECTED_HEADERS = new Array(12).fill(null); 
     let myChart = null;
     const MONTH_POSSIBILITIES = [["ENERO","Enero","ENE","JAN"],["FEBRERO","Febrero","FEB"],["MARZO","Marzo","MAR"],["ABRIL","Abril","ABR","APR"],["MAYO","Mayo","MAY"],["JUNIO","Junio","JUN"],["JULIO","Julio","JUL"],["AGOSTO","Agosto","AGO","AUG"],["SEPTIEMBRE","Septiembre","SEP"],["OCTUBRE","Octubre","OCT"],["NOVIEMBRE","Noviembre","NOV"],["DICIEMBRE","Diciembre","DIC"]];
-    const MONTH_LABELS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+    const MONTH_LABELS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
     let pendingExpense = null;
 
     function unlockApp() {
@@ -277,8 +278,6 @@
         input.value = new Intl.NumberFormat('es-CO').format(parseInt(val));
     }
     function getAmountValue(id) { return parseFloat(document.getElementById(id).value.replace(/\./g, '')) || 0; }
-    
-    // BÚSQUEDA SEGURA (String + Trim + Upper)
     function getSmartValue(obj, keys) {
         if(!obj) return undefined;
         const objKeys = Object.keys(obj);
@@ -288,91 +287,22 @@
         }
         return undefined;
     }
-    
     function detectMonthHeaders(sampleRow) {
         if(!sampleRow) return;
         const keys = Object.keys(sampleRow);
         MONTH_POSSIBILITIES.forEach((possibles, idx) => {
-            const found = keys.find(k => possibles.includes(String(k).trim().toUpperCase()));
+            const found = keys.find(k => possibles.includes(k.trim().toUpperCase()));
             if(found) DETECTED_HEADERS[idx] = found;
         });
     }
 
-    // --- RENDER DETALLE ---
-    function renderDetailView() {
-        const code = document.getElementById('detailSelectCode').value;
-        if(!code) return;
-        document.getElementById('detailPanel').style.display = 'block';
-        
-        const line = budget.find(b => getSmartValue(b, ["CODIGO","Codigo"]) == code);
-        if(!line) return;
-
-        let totalBudget = 0;
-        for(let i=0; i<12; i++) {
-            let raw = getSmartValue(line, MONTH_POSSIBILITIES[i]) || "0";
-            if(typeof raw==='string') raw=raw.replace(/\./g,'').replace(/,/g,'.');
-            totalBudget += (parseFloat(raw)||0);
-        }
-
-        let totalSpent = 0;
-        const specificExpenses = expenses.filter(x => {
-            // Comparación segura de códigos (convertir a String)
-            const c1 = String(getSmartValue(x, ["code","Code","codigo","CODIGO"])).trim();
-            const c2 = String(code).trim();
-            return c1 === c2;
-        });
-        specificExpenses.forEach(x => { totalSpent += parseFloat(getSmartValue(x, ["amount","Amount","monto","MONTO"]))||0; });
-
-        document.getElementById('dTotal').innerText = fmt(totalBudget);
-        document.getElementById('dSpent').innerText = fmt(totalSpent);
-        document.getElementById('dAvail').innerText = fmt(totalBudget - totalSpent);
-
-        let perc = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
-        if(perc>100) perc=100;
-        const bar = document.getElementById('dProgress');
-        bar.style.width = perc + "%";
-        bar.className = perc > 90 ? "progress-fill danger" : "progress-fill";
-        document.getElementById('dPercText').innerText = perc.toFixed(1) + "%";
-
-        // Tabla Gastos
-        const tbody = document.querySelector('#detailTable tbody');
-        tbody.innerHTML = '';
-        if(specificExpenses.length === 0) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999">Sin gastos</td></tr>';
-        else {
-            specificExpenses.sort((a,b) => new Date(getSmartValue(b,["date","Date","fecha"])) - new Date(getSmartValue(a,["date","Date","fecha"])));
-            specificExpenses.forEach(x => {
-                const r = document.createElement('tr');
-                const st = getSmartValue(x, ["status","Estado","estado"]) || "OC";
-                const stClass = st==="PAGADO"?"status-paid":"status-committed";
-                r.innerHTML = `
-                    <td>${getSmartValue(x,["date","Date","fecha"])}</td>
-                    <td>${getSmartValue(x,["ref","Ref","referencia"])}</td>
-                    <td>${getSmartValue(x,["user","User","usuario"])||"JIAT"}</td>
-                    <td class="money">${fmt(getSmartValue(x,["amount","Amount","monto"]))}</td>
-                    <td><span class="status-badge ${stClass}">${st}</span></td>
-                `;
-                tbody.appendChild(r);
-            });
-        }
-
-        // Tabla Traslados
-        const specificTransfers = transfers.filter(t => String(getSmartValue(t, ["Codigo","CODIGO","codigo"])).trim() == String(code).trim());
-        const tbodyT = document.querySelector('#detailTransfersTable tbody');
-        tbodyT.innerHTML = '';
-        if(specificTransfers.length === 0) tbodyT.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#999">Sin traslados</td></tr>';
-        else {
-            specificTransfers.reverse().forEach(t => {
-                const r = document.createElement('tr');
-                r.innerHTML = `<td>${getSmartValue(t,["Fecha","fecha"])}</td><td><span class="badge-transfer">${getSmartValue(t,["Origen","origen"])} ➔ ${getSmartValue(t,["Destino","destino"])}</span></td><td style="font-weight:bold">${fmt(getSmartValue(t,["Valor","valor"]))}</td><td>${getSmartValue(t,["Usuario","usuario"])}</td>`;
-                tbodyT.appendChild(r);
-            });
-        }
-    }
-
+    // --- CHART & DATA ---
     function updateChart() {
         if(typeof Chart==='undefined') return;
         const ctx = document.getElementById('budgetChart').getContext('2d');
         let dataBudget = new Array(12).fill(0), dataSpent = new Array(12).fill(0);
+        
+        // SUMA PRESUPUESTO
         budget.forEach(b => {
             for(let i=0; i<12; i++) {
                 let raw = getSmartValue(b, MONTH_POSSIBILITIES[i])||"0";
@@ -380,14 +310,20 @@
                 dataBudget[i] += (parseFloat(raw)||0);
             }
         });
+
+        // SUMA GASTOS
         expenses.forEach(x => {
             const d = getSmartValue(x, ["date","Date","fecha","FECHA"]);
             if(d) {
-                const m = parseInt(d.split('-')[1])-1;
-                const a = parseFloat(getSmartValue(x, ["amount","Amount","monto","MONTO"]))||0;
-                if(m>=0 && m<12) dataSpent[m] += a;
+                // Aseguramos formato YYYY-MM-DD o DD/MM/YYYY
+                let parts = d.includes('/') ? d.split('/') : d.split('-');
+                // Si es DD/MM/YYYY -> parts[1] es mes. Si YYYY-MM-DD -> parts[1] es mes.
+                const mIdx = parseInt(parts[1]) - 1; 
+                const amt = parseFloat(getSmartValue(x, ["amount","Amount","monto","MONTO"]))||0;
+                if(mIdx >= 0 && mIdx < 12) dataSpent[mIdx] += amt;
             }
         });
+
         if(myChart) myChart.destroy();
         myChart = new Chart(ctx, {
             type: 'bar',
@@ -426,6 +362,71 @@
         if(showLoaderUI) document.getElementById('loader').style.display = 'none';
     }
 
+    // --- RENDER DETALLE ---
+    function renderDetailView() {
+        const code = document.getElementById('detailSelectCode').value;
+        if(!code) return;
+        document.getElementById('detailPanel').style.display = 'block';
+        
+        const line = budget.find(b => String(getSmartValue(b, ["CODIGO","Codigo"])).trim() == String(code).trim());
+        if(!line) return;
+
+        let totalBudget = 0;
+        for(let i=0; i<12; i++) {
+            let raw = getSmartValue(line, MONTH_POSSIBILITIES[i]) || "0";
+            if(typeof raw==='string') raw=raw.replace(/\./g,'').replace(/,/g,'.');
+            totalBudget += (parseFloat(raw)||0);
+        }
+
+        let totalSpent = 0;
+        const specificExpenses = expenses.filter(x => String(getSmartValue(x, ["code","Code","codigo","CODIGO"])).trim() == String(code).trim());
+        specificExpenses.forEach(x => { totalSpent += parseFloat(getSmartValue(x, ["amount","Amount","monto","MONTO"]))||0; });
+
+        document.getElementById('dTotal').innerText = fmt(totalBudget);
+        document.getElementById('dSpent').innerText = fmt(totalSpent);
+        document.getElementById('dAvail').innerText = fmt(totalBudget - totalSpent);
+
+        let perc = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
+        if(perc>100) perc=100;
+        const bar = document.getElementById('dProgress');
+        bar.style.width = perc + "%";
+        bar.className = perc > 90 ? "progress-fill danger" : "progress-fill";
+        document.getElementById('dPercText').innerText = perc.toFixed(1) + "%";
+
+        const tbody = document.querySelector('#detailTable tbody');
+        tbody.innerHTML = '';
+        if(specificExpenses.length === 0) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999">Sin gastos</td></tr>';
+        else {
+            specificExpenses.sort((a,b) => new Date(getSmartValue(b,["date","fecha"])) - new Date(getSmartValue(a,["date","fecha"])));
+            specificExpenses.forEach(x => {
+                const r = document.createElement('tr');
+                const st = getSmartValue(x, ["status","Estado","estado"]) || "OC";
+                const stClass = st==="PAGADO"?"status-paid":"status-committed";
+                r.innerHTML = `
+                    <td>${getSmartValue(x,["date","Date","fecha"])}</td>
+                    <td>${getSmartValue(x,["ref","Ref","referencia"])}</td>
+                    <td>${getSmartValue(x,["user","User","usuario"])||"JIAT"}</td>
+                    <td class="money">${fmt(getSmartValue(x,["amount","Amount","monto"]))}</td>
+                    <td><span class="status-badge ${stClass}">${st}</span></td>
+                `;
+                tbody.appendChild(r);
+            });
+        }
+
+        const specificTransfers = transfers.filter(t => String(getSmartValue(t, ["Codigo","CODIGO","codigo"])).trim() == String(code).trim());
+        const tbodyT = document.querySelector('#detailTransfersTable tbody');
+        tbodyT.innerHTML = '';
+        if(specificTransfers.length === 0) tbodyT.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#999">Sin traslados</td></tr>';
+        else {
+            specificTransfers.reverse().forEach(t => {
+                const r = document.createElement('tr');
+                r.innerHTML = `<td>${getSmartValue(t,["Fecha","fecha"])}</td><td><span class="badge-transfer">${getSmartValue(t,["Origen","origen"])} ➔ ${getSmartValue(t,["Destino","destino"])}</span></td><td style="font-weight:bold">${fmt(getSmartValue(t,["Valor","valor"]))}</td><td>${getSmartValue(t,["Usuario","usuario"])}</td>`;
+                tbodyT.appendChild(r);
+            });
+        }
+    }
+
+    // --- GUARDAR ---
     async function tryAddExpense(e) {
         e.preventDefault();
         const btn = document.getElementById('btnSave');
@@ -439,7 +440,7 @@
         const status = document.getElementById('status').value;
         const mIdx = parseInt(dateStr.split('-')[1])-1;
         
-        const line = budget.find(b => getSmartValue(b, ["CODIGO","Codigo","Code"]) == code);
+        const line = budget.find(b => String(getSmartValue(b, ["CODIGO","Codigo","Code"])).trim() == String(code).trim());
         if(!line) { alert("Código no encontrado"); btn.disabled=false; btn.innerText="Validar"; return; }
         
         let raw = getSmartValue(line, MONTH_POSSIBILITIES[mIdx])||"0";
@@ -448,7 +449,9 @@
         
         let spent = 0;
         expenses.forEach(x => {
-            if(getSmartValue(x,["code","Code","codigo","CODIGO"])==code && (parseInt(getSmartValue(x,["date","Date","fecha","FECHA"]).split('-')[1])-1)==mIdx) 
+            const c = String(getSmartValue(x,["code","Code","codigo","CODIGO"])).trim();
+            const d = getSmartValue(x,["date","Date","fecha","FECHA"]);
+            if(c==code && d && (parseInt(d.split('-')[1])-1)==mIdx) 
                 spent += parseFloat(getSmartValue(x,["amount","Amount","monto","MONTO"]));
         });
 
@@ -476,14 +479,13 @@
         const tIdx = parseInt(document.getElementById('monthTarget').value);
         const amount = getAmountValue('amtTransfer');
         const user = document.getElementById('uName').value;
-        
         if(isNaN(sIdx) || isNaN(tIdx)) return alert("Selecciona meses");
         if(sIdx===tIdx || amount<=0) return alert("Datos inválidos");
         
         document.getElementById('loader').style.display = 'flex';
         await syncData(false);
         
-        const line = budget.find(b => getSmartValue(b, ["CODIGO","Codigo"]) == code);
+        const line = budget.find(b => String(getSmartValue(b, ["CODIGO","Codigo"])) == String(code));
         const colSrc = DETECTED_HEADERS[sIdx], colTgt = DETECTED_HEADERS[tIdx];
         
         let raw = line[colSrc]||"0";
@@ -492,7 +494,9 @@
         
         let spentSrc = 0;
         expenses.forEach(x => {
-            if(getSmartValue(x,["code","Code","codigo"])==code && (parseInt(getSmartValue(x,["date","Date","fecha"]).split('-')[1])-1)==sIdx)
+            const c = String(getSmartValue(x,["code","Code","codigo","CODIGO"])).trim();
+            const d = getSmartValue(x,["date","Date","fecha","FECHA"]);
+            if(c==code && d && (parseInt(d.split('-')[1])-1)==sIdx)
                 spentSrc += parseFloat(getSmartValue(x,["amount","Amount","monto"]));
         });
 
@@ -566,8 +570,9 @@
         let tSpent = 0;
         expenses.forEach(x => {
             const d = getSmartValue(x, ["date","Date","fecha","FECHA"]); if(!d) return;
-            const m = parseInt(d.split('-')[1])-1;
-            const c = getSmartValue(x, ["code","Code","codigo","CODIGO"]);
+            const parts = d.includes('/') ? d.split('/') : d.split('-');
+            const m = parseInt(parts[1])-1;
+            const c = String(getSmartValue(x, ["code","Code","codigo","CODIGO"])).trim();
             const a = parseFloat(getSmartValue(x, ["amount","Amount","monto","MONTO"]))||0;
             expMap[`${c}-${m}`] = (expMap[`${c}-${m}`]||0) + a;
             tSpent += a;
@@ -576,8 +581,9 @@
         const tb = document.querySelector('#mainTable tbody');
         tb.innerHTML = '';
         let tBud = 0;
+        
         budget.forEach(l => {
-            const c = getSmartValue(l, ["CODIGO","Codigo"]); if(!c) return;
+            const c = String(getSmartValue(l, ["CODIGO","Codigo"])).trim(); if(!c) return;
             const tr = document.createElement('tr');
             let h = `<td class="tooltip-container"><b>${c}</b><span class="tooltip-text">${getSmartValue(l,["DESCRIPCION"])||""}</span></td>`;
             let rowSum = 0;
@@ -604,18 +610,19 @@
 
         const th = document.querySelector('#histTable tbody');
         th.innerHTML = '';
-        [...expenses].sort((a,b)=>getSmartValue(b,["id"])-getSmartValue(a,["id"])).forEach(x => {
+        [...expenses].sort((a,b)=>getSmartValue(b,["id"])-getSmartValue(a,["id"])).slice(0,20).forEach(x => {
             const r = document.createElement('tr');
             const d = getSmartValue(x, ["date","Date","fecha","FECHA"]);
-            const cd = getSmartValue(x, ["code","Code","codigo","CODIGO"]);
+            const u = getSmartValue(x, ["user","User","usuario","USUARIO"])||"JIAT";
             const rf = getSmartValue(x, ["ref","Ref","referencia","REFERENCIA"]);
+            const cd = getSmartValue(x, ["code","Code","codigo","CODIGO"]);
             const am = getSmartValue(x, ["amount","Amount","monto","MONTO"]);
             const id = getSmartValue(x, ["id","ID"]);
-            const st = getSmartValue(x, ["status","Status","estado","ESTADO"])||"OC";
+            const st = getSmartValue(x, ["status","Estado","estado","ESTADO"])||"OC";
             const isPaid = st.toUpperCase()==="PAGADO";
-            const btn = !isPaid ? `<button class="success action-btn" title="Pagar" onclick="markAsPaid(${id})">✅</button>` : '';
-            
-            r.innerHTML = `<td>${d}</td><td>${cd}<br><small>${rf}</small></td><td class="money">${fmt(am)}</td><td><span class="status-badge ${isPaid?'status-paid':'status-committed'}">${st}</span></td><td style="white-space:nowrap;">${btn}<button class="danger action-btn" onclick="delExp(${id})">🗑️</button></td>`;
+            const badge = isPaid ? "status-paid" : "status-committed";
+            const btn = !isPaid ? `<button class="success action-btn" onclick="markAsPaid(${id})">✅</button>` : '';
+            r.innerHTML = `<td>${d}</td><td>${cd}<br><small>${rf}</small></td><td class="money">${fmt(am)}</td><td><span class="status-badge ${badge}">${st}</span></td><td style="white-space:nowrap">${btn}<button class="danger action-btn" onclick="delExp(${id})">🗑️</button></td>`;
             th.appendChild(r);
         });
 
@@ -625,10 +632,34 @@
         else {
             [...transfers].reverse().forEach(t => {
                 const r = document.createElement('tr');
-                r.innerHTML = `<td>${getSmartValue(t, ["fecha"])}</td><td>${getSmartValue(t, ["codigo"])}</td><td><span class="badge-transfer">${getSmartValue(t, ["origen"])} ➔ ${getSmartValue(t, ["destino"])}</span></td><td style="font-weight:bold">${fmt(getSmartValue(t, ["valor"]))}</td><td>${getSmartValue(t, ["usuario"])}</td>`;
+                r.innerHTML = `<td>${getSmartValue(t, ["Fecha","fecha"])}</td><td>${getSmartValue(t, ["Codigo","codigo"])}</td><td><span class="badge-transfer">${getSmartValue(t, ["Origen","origen"])} ➔ ${getSmartValue(t, ["Destino","destino"])}</span></td><td style="font-weight:bold">${fmt(getSmartValue(t, ["Valor","valor"]))}</td><td>${getSmartValue(t, ["Usuario","usuario"])}</td>`;
                 tt.appendChild(r);
             });
         }
+    }
+
+    function downloadExcel() {
+        let csv = "Codigo,Ene,Feb,Mar,Abr,May,Jun,Jul,Ago,Sep,Oct,Nov,Dic,Total\n";
+        budget.forEach(l => {
+            const c = String(getSmartValue(l, ["CODIGO","Codigo"])).trim(); if(!c) return;
+            let r = [c], tot=0;
+            for(let i=0; i<12; i++) {
+                let raw = getSmartValue(l, MONTH_POSSIBILITIES[i])||"0";
+                let b = parseFloat(typeof raw==='string'?raw.replace(/\./g,'').replace(/,/g,'.'):raw)||0;
+                let s = 0;
+                expenses.forEach(x => {
+                    if(String(getSmartValue(x,["code","Code","codigo","CODIGO"])).trim()==c && (parseInt(getSmartValue(x,["date","Date","fecha"]).split('-')[1])-1)==i)
+                        s += parseFloat(getSmartValue(x,["amount","Amount","monto","MONTO"]));
+                });
+                r.push(b-s); tot += (b-s);
+            }
+            r.push(tot); csv += r.join(",")+"\n";
+        });
+        const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "Ejecucion_Presupuestal.csv";
+        link.click();
     }
 
     function fmt(n) { return new Intl.NumberFormat('es-CO', {maximumFractionDigits:0}).format(n); }
