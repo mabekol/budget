@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Saint Aubin International - Control Presupuestal</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
-    /* ultima version valida con API en https://sheetdb.io/api/v1/sw4ed7qqbxl4k?sheet=Presupuesto */
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
     <style>
         /* === ESTILOS G&C === */
         :root {
@@ -68,7 +68,7 @@
         .status-paid { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .badge-transfer { background: #fff3e0; color: #e67e22; padding: 4px 8px; border-radius: 12px; font-weight: bold; font-size: 0.85em; border: 1px solid #ffe0b2; }
         
-        /* TOOLTIP & PROGRESS */
+        /* TOOLTIPS & PROGRESS */
         .tooltip-container { position: relative; display: inline-block; cursor: help; border-bottom: 1px dashed var(--accent); }
         .tooltip-text { visibility: hidden; width: 250px; background-color: #002B5C; color: #fff; text-align: left; border-radius: 6px; padding: 10px; position: absolute; z-index: 100; bottom: 125%; left: 50%; margin-left: -125px; opacity: 0; transition: opacity 0.3s; font-size: 0.85em; font-weight: normal; box-shadow: 0 5px 15px rgba(0,0,0,0.3); line-height: 1.4; }
         .tooltip-text::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #002B5C transparent transparent transparent; }
@@ -118,7 +118,7 @@
             if(document.getElementById('loginScreen').style.display === 'none') {
                 document.getElementById('mainContainer').style.display = 'block';
             }
-        }, 2000);
+        }, 3000);
     };
 </script>
 
@@ -139,7 +139,7 @@
         </div>
         <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:25px;">
             <button onclick="closeModal()" style="background:#ecf0f1; color:#7f8c8d">Cancelar</button>
-            <button onclick="executeTransfer()" class="accent" style="background:var(--success)">✅ Autorizar y Guardar</button>
+            <button onclick="executeTransfer()" class="accent" style="background:var(--success)">✅ Autorizar</button>
         </div>
     </div>
 </div>
@@ -173,8 +173,10 @@
                     <div style="flex:1;"><label>Solicitante</label><select id="uName" required><option value="JIAT" selected>JIAT</option><option value="MBR">MBR</option></select></div>
                     <div style="flex:1;"><label>Estado</label><select id="status" required><option value="OC">Orden de Compra</option><option value="PAGADO">Factura / Pagado</option></select></div>
                 </div>
+                
                 <label>Rubro</label><select id="selCode" required><option>Cargando...</option></select>
                 <label>Referencia</label><input type="text" id="ref" placeholder="Ej: OC-1001" required>
+                
                 <div style="display:flex; gap:15px;">
                     <div style="flex:1"><label>Monto ($)</label><input type="text" id="amtDisplay" placeholder="0" required oninput="formatCurrencyInput(this)"></div>
                     <div style="flex:1"><label>Fecha</label><input type="date" id="date" required></div>
@@ -218,7 +220,7 @@
         <h2>🔍 Análisis Detallado</h2>
         <div style="display:flex; gap:15px; align-items:flex-end; margin-bottom:20px;">
             <div style="flex:1;"><label>Rubro:</label><select id="detailSelectCode" onchange="renderDetailView()" style="margin-bottom:0; border:2px solid var(--primary);"></select></div>
-            <button onclick="renderDetailView()" class="primary">Ver</button>
+            <button onclick="renderDetailView()" class="primary">Ver Detalle</button>
         </div>
         <div id="detailPanel" style="display:none;">
             <div class="kpi-box" style="background:white; border:1px solid #eee; margin-bottom:20px;">
@@ -244,15 +246,15 @@
 
 <script>
     // ==================================================
-    // ⚠️ PEGA TU URL DE SHEETDB AQUÍ ⚠️
-    const API_URL = "https://sheetdb.io/api/v1/sw4ed7qqbxl4k";
+    // ⚠️ PEGA TU URL DE GOOGLE SCRIPT AQUÍ ⚠️
+    const API_URL = "https://script.google.com/macros/s/AKfycbwMebzoBSMi-sgvL0xxHoN_zYjiQyBwsHR2CTRePypXQALcRVwjq6AmxEXXubFE_QE/exec"; 
     // ==================================================
 
     let budget = [], expenses = [], transfers = [];
     let DETECTED_HEADERS = new Array(12).fill(null); 
     let myChart = null;
     const MONTH_POSSIBILITIES = [["ENERO","Enero","ENE","JAN"],["FEBRERO","Febrero","FEB"],["MARZO","Marzo","MAR"],["ABRIL","Abril","ABR","APR"],["MAYO","Mayo","MAY"],["JUNIO","Junio","JUN"],["JULIO","Julio","JUL"],["AGOSTO","Agosto","AGO","AUG"],["SEPTIEMBRE","Septiembre","SEP"],["OCTUBRE","Octubre","OCT"],["NOVIEMBRE","Noviembre","NOV"],["DICIEMBRE","Diciembre","DIC"]];
-    const MONTH_LABELS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+    const MONTH_LABELS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
     let pendingExpense = null;
 
     function unlockApp() {
@@ -309,86 +311,54 @@
         });
     }
 
-    // --- CHART ---
-    function updateChart() {
-        if(typeof Chart==='undefined') return;
-        const ctx = document.getElementById('budgetChart').getContext('2d');
-        let dataBudget = new Array(12).fill(0), dataSpent = new Array(12).fill(0);
-        budget.forEach(b => {
-            for(let i=0; i<12; i++) {
-                let raw = getSmartValue(b, MONTH_POSSIBILITIES[i]);
-                dataBudget[i] += parseMoney(raw);
-            }
+    // --- CONEXIÓN CON GOOGLE SCRIPT ---
+    async function apiCall(payload) {
+        // Usamos POST + text/plain para evitar CORS y AdBlockers
+        const res = await fetch(API_URL, {
+            method: 'POST',
+            redirect: 'follow',
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(payload)
         });
-        expenses.forEach(x => {
-            const d = getSmartValue(x, ["date","Date","fecha","FECHA"]);
-            if(d) {
-                let parts = d.includes('/') ? d.split('/') : d.split('-');
-                const mIdx = parseInt(parts[1]) - 1;
-                const amt = parseMoney(getSmartValue(x, ["amount","Amount","monto","MONTO"]));
-                if(mIdx >= 0 && mIdx < 12) dataSpent[mIdx] += amt;
-            }
-        });
-        if(myChart) myChart.destroy();
-        myChart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: MONTH_LABELS,
-                datasets: [
-                    { label: 'Presupuesto', data: dataBudget, backgroundColor: '#002B5C', borderRadius: 4 },
-                    { label: 'Ejecutado', data: dataSpent, backgroundColor: '#00A3E0', borderRadius: 4 }
-                ]
-            },
-            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
-        });
+        const json = await res.json();
+        if(json.error) throw new Error(json.error);
+        return json;
     }
 
-    // --- SINCRONIZACIÓN (CARGA PARALELA) ---
     async function syncData(showLoaderUI = false) {
         if(showLoaderUI) {
             document.getElementById('loader').style.display = 'flex';
             document.getElementById('loadMsg').innerText = "Sincronizando...";
         }
         
-        let attempts = 0;
-        let success = false;
-        
-        while(attempts < 2 && !success) { 
+        let attempts = 0, success = false;
+        while(attempts < 2 && !success) {
             attempts++;
             try {
-                const ts = Date.now();
-                // Ejecutar peticiones en paralelo para más velocidad
-                const [resB, resE, resT] = await Promise.all([
-                    fetch(`${API_URL}?sheet=Presupuesto&t=${ts}`),
-                    fetch(`${API_URL}?sheet=Gastos&t=${ts}`),
-                    fetch(`${API_URL}?sheet=Traslados&t=${ts}`)
-                ]);
-
-                budget = await resB.json();
-                if((!budget || budget.length===0) && attempts===1) throw new Error("Cold Start");
+                const res = await apiCall({ action: 'read', sheet: 'Presupuesto' });
+                budget = res;
                 if(budget.length>0) detectMonthHeaders(budget[0]);
-
-                expenses = await resE.json();
-                transfers = await resT.json();
+                
+                expenses = await apiCall({ action: 'read', sheet: 'Gastos' });
+                transfers = await apiCall({ action: 'read', sheet: 'Traslados' });
 
                 renderUI(); updateChart(); success = true;
             } catch(e) {
                 console.warn("Intento fallido:", e);
-                if(attempts === 1) await new Promise(r => setTimeout(r, 1500)); 
+                if(attempts === 1) await new Promise(r=>setTimeout(r,1500)); 
             }
         }
-        
-        if(!success && showLoaderUI) alert("⚠️ No se pudieron cargar los datos.");
         if(showLoaderUI) document.getElementById('loader').style.display = 'none';
     }
 
-    // --- VALIDACIÓN ---
+    // --- LÓGICA ---
     async function tryAddExpense(e) {
         e.preventDefault();
         const btn = document.getElementById('btnSave');
         btn.disabled = true; btn.innerText = "Verificando...";
-        await syncData(false);
         
+        await syncData(false); // Recarga
+
         const code = document.getElementById('selCode').value;
         const amount = getAmountValue('amtDisplay');
         const dateStr = document.getElementById('date').value;
@@ -406,152 +376,219 @@
             const c = String(getSmartValue(x,["code","Code","codigo","CODIGO"])).trim();
             const d = getSmartValue(x,["date","Date","fecha","FECHA"]);
             if(c==code && d && (parseInt(d.split('-')[1])-1)==mIdx) 
-                spent += parseMoney(getSmartValue(x, ["amount","Amount","monto","MONTO"]));
+                spent += parseMoney(getSmartValue(x,["amount","Amount","monto","MONTO"]));
         });
 
         if(amount > (budMonth - spent)) {
-            alert(`⛔ SALDO INSUFICIENTE\nMes: ${MONTH_LABELS[mIdx]}\nDisponible: ${fmt(budMonth-spent)}`);
+            const missing = amount - (budMonth - spent);
+            pendingExpense = { 
+                code, amount, date: dateStr, ref, status, monthIdx, missing,
+                user: document.getElementById('uName').value
+            };
+            document.getElementById('modalTargetMonth').innerText = MONTH_LABELS[mIdx];
+            document.getElementById('modalMissing').innerText = fmt(missing);
+            populateSourceSelect(line, pendingExpense.missing, mIdx);
+            document.getElementById('alertModal').style.display = 'flex';
+            
             btn.disabled=false; btn.innerText="Validar";
         } else {
             saveExpense(code, ref, amount, dateStr, status);
         }
     }
 
-    // --- PAGAR / LEGALIZAR ---
-    async function markAsPaid(id) {
-        if(!confirm("¿Confirmar pago?")) return;
-        document.getElementById('loader').style.display = 'flex';
-        try {
-            await fetch(`${API_URL}/id/${id}?sheet=Gastos`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({data: { "estado": "PAGADO" }}) });
-            alert("✅ Actualizado"); syncData(true);
-        } catch(e) { alert("Error: "+e.message); document.getElementById('loader').style.display='none'; }
-    }
-
-    // --- TRASLADO ---
-    async function handleTransfer(e) {
-        e.preventDefault();
-        const code = document.getElementById('selCodeTransfer').value;
-        const sIdx = parseInt(document.getElementById('monthSource').value);
-        const tIdx = parseInt(document.getElementById('monthTarget').value);
-        const amount = getAmountValue('amtTransfer');
-        const user = document.getElementById('uName').value;
-        
-        if(isNaN(sIdx) || isNaN(tIdx)) return alert("Selecciona meses");
-        if(sIdx===tIdx || amount<=0) return alert("Datos inválidos");
-        
-        document.getElementById('loader').style.display = 'flex';
-        await syncData(false);
-        
-        const line = budget.find(b => String(getSmartValue(b, ["CODIGO","Codigo"])) == String(code));
-        const colSrc = DETECTED_HEADERS[sIdx], colTgt = DETECTED_HEADERS[tIdx];
-        
-        const budSrc = parseMoney(line[colSrc]);
-        
-        let spentSrc = 0;
-        expenses.forEach(x => {
-            const c = String(getSmartValue(x,["code","Code","codigo","CODIGO"])).trim();
-            const d = getSmartValue(x,["date","Date","fecha","FECHA"]);
-            if(c==code && d && (parseInt(d.split('-')[1])-1)==sIdx)
-                spentSrc += parseMoney(getSmartValue(x,["amount","Amount","monto"]));
+    function populateSourceSelect(line, missing, targetIdx) {
+        const select = document.getElementById('modalSourceMonth');
+        select.innerHTML = '';
+        DETECTED_HEADERS.forEach((header, idx) => {
+            if(idx === targetIdx || !header) return;
+            const bud = parseMoney(line[header]);
+            
+            let spent = 0;
+            const codeVal = getSmartValue(line, ["CODIGO"]);
+            expenses.forEach(x => {
+                if(x.codigo == codeVal && (parseInt(x.fecha.split('-')[1])-1) == idx) 
+                    spent += parseMoney(x.monto);
+            });
+            
+            const avail = bud - spent;
+            if(avail >= missing) {
+                const opt = document.createElement('option');
+                opt.value = header; // Usamos el nombre real de columna
+                opt.text = `${MONTH_LABELS[idx]} (Disp: ${fmt(avail)})`;
+                select.appendChild(opt);
+            }
         });
+        if(select.options.length === 0) select.innerHTML = '<option>⛔ Sin fondos</option>';
+    }
 
-        if(amount > (budSrc - spentSrc)) {
-            document.getElementById('loader').style.display='none';
-            return alert(`⛔ Fondos insuficientes en origen.`);
-        }
+    function closeModal() { document.getElementById('alertModal').style.display = 'none'; pendingExpense = null; }
 
+    async function executeTransfer() {
+        if(!pendingExpense) return;
+        const colSource = document.getElementById('modalSourceMonth').value;
+        if(!colSource || colSource.includes("⛔")) return alert("Selecciona origen");
+        
+        closeModal();
+        const tData = {...pendingExpense};
+        pendingExpense = null;
+
+        document.getElementById('loader').style.display = 'flex';
+        document.getElementById('loadMsg').innerText = "Aplicando traslado...";
+        
         try {
-            let vSrc = parseMoney(line[colSrc]);
-            let vTgt = parseMoney(line[colTgt]);
+            const line = budget.find(b => getSmartValue(b, ["CODIGO"]) == tData.code);
+            const colTarget = DETECTED_HEADERS[tData.monthIdx];
             
-            const upd = {}; upd[colSrc] = vSrc - amount; upd[colTgt] = vTgt + amount;
-            const key = Object.keys(line).find(k => k.toUpperCase() === "CODIGO") || "CODIGO";
+            let valSource = parseMoney(line[colSource]);
+            let valTarget = parseMoney(line[colTarget]);
             
-            await fetch(`${API_URL}/${key}/${encodeURIComponent(code)}?sheet=Presupuesto`, {
-                method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({data: upd})
+            // 1. Actualizar Presupuesto
+            await apiCall({
+                action: 'transferBudget',
+                code: tData.code,
+                colSource: colSource,
+                valSource: valSource - tData.missing,
+                colTarget: colTarget,
+                valTarget: valTarget + tData.missing
             });
             
-            const log = { "fecha": new Date().toISOString().split('T')[0], "codigo": code, "origen": colSrc, "destino": colTgt, "valor": amount, "usuario": user };
-            await fetch(`${API_URL}?sheet=Traslados`, {
-                method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({data: [log]})
+            // 2. Log Traslado
+            await apiCall({
+                action: 'logTransfer',
+                data: {
+                    fecha: new Date().toISOString().split('T')[0],
+                    codigo: tData.code,
+                    origen: colSource,
+                    destino: colTarget,
+                    valor: tData.missing,
+                    usuario: tData.user
+                }
             });
             
-            alert("✅ Traslado Exitoso");
-            document.getElementById('amtTransfer').value = "";
+            // 3. Guardar Gasto
+            await saveExpense(tData.code, tData.ref, tData.amount, tData.date, tData.status, false);
+            alert("✅ Traslado completado");
             syncData(true);
+
         } catch(e) { alert("Error: "+e.message); document.getElementById('loader').style.display='none'; }
     }
 
-    // --- GUARDAR ---
-    async function saveExpense(code, ref, amount, date, status) {
-        document.getElementById('loader').style.display = 'flex';
+    async function saveExpense(code, ref, amount, date, status, hideLoader=true) {
+        if(hideLoader) document.getElementById('loader').style.display = 'flex';
         const user = document.getElementById('uName').value;
-        localStorage.setItem('u', user);
-        
-        // DATOS EN MINÚSCULA ESTÁNDAR
         const data = { 
-            "id": Date.now(), 
-            "codigo": code, 
-            "referencia": ref, 
-            "monto": amount, 
-            "fecha": date, 
-            "usuario": user, 
-            "estado": status 
+            id: Date.now(), fecha: date, usuario: user,
+            codigo: code, referencia: ref, monto: amount, estado: status 
         };
         
         try {
-            const res = await fetch(`${API_URL}?sheet=Gastos`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({data: [data]}) });
-            if(!res.ok) throw new Error("Error Save");
-            await syncData(false);
-            document.getElementById('ref').value = ""; document.getElementById('amtDisplay').value = "";
-            alert("✅ Guardado");
-        } catch(e) { alert("Error: "+e.message); }
-        document.getElementById('loader').style.display='none';
-        const btn = document.getElementById('btnSave'); btn.disabled=false; btn.innerText="Validar";
+            await apiCall({ action: 'addExpense', data: data });
+            if(hideLoader) {
+                await syncData(false);
+                document.getElementById('ref').value = "";
+                document.getElementById('amtDisplay').value = "";
+                document.getElementById('loader').style.display='none';
+                const btn = document.getElementById('btnSave'); btn.disabled=false; btn.innerText="Validar";
+                alert("✅ Guardado");
+            }
+        } catch(e) { alert("Error: "+e.message); document.getElementById('loader').style.display='none'; }
     }
 
+    async function markAsPaid(id) {
+        if(!confirm("¿Confirmar pago?")) return;
+        document.getElementById('loader').style.display='flex';
+        try {
+            await apiCall({ action: 'updateExpense', id: id, estado: 'PAGADO' });
+            syncData(true);
+        } catch(e) { alert(e); document.getElementById('loader').style.display='none'; }
+    }
+    
     async function delExp(id) {
         if(!confirm("¿Borrar?")) return;
         document.getElementById('loader').style.display='flex';
-        try { await fetch(`${API_URL}/id/${id}?sheet=Gastos`, {method:'DELETE'}); await syncData(false); }
-        catch(e) { alert("Error"); }
-        document.getElementById('loader').style.display='none';
+        try {
+            await apiCall({ action: 'deleteExpense', id: id });
+            syncData(true);
+        } catch(e) { alert(e); document.getElementById('loader').style.display='none'; }
+    }
+
+    async function handleTransfer(e) {
+        e.preventDefault();
+        alert("Usa el flujo automático al registrar gasto para traslados.");
+    }
+
+    // --- RENDER ---
+    function updateChart() {
+        if(typeof Chart==='undefined') return;
+        const ctx = document.getElementById('budgetChart').getContext('2d');
+        let dataBudget = new Array(12).fill(0), dataSpent = new Array(12).fill(0);
+        
+        budget.forEach(b => {
+            for(let i=0; i<12; i++) {
+                let raw = getSmartValue(b, MONTH_POSSIBILITIES[i]);
+                dataBudget[i] += parseMoney(raw);
+            }
+        });
+        expenses.forEach(x => {
+            const d = getSmartValue(x, ["date","Date","fecha","FECHA"]);
+            if(d) {
+                let parts = d.includes('/') ? d.split('/') : d.split('-');
+                const mIdx = parseInt(parts[1]) - 1;
+                const amt = parseMoney(getSmartValue(x, ["amount","Amount","monto","MONTO"]));
+                if(mIdx >= 0 && mIdx < 12) dataSpent[mIdx] += amt;
+            }
+        });
+
+        if(myChart) myChart.destroy();
+        myChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: MONTH_LABELS,
+                datasets: [
+                    { label: 'Presupuesto', data: dataBudget, backgroundColor: '#002B5C', borderRadius: 4 },
+                    { label: 'Ejecutado', data: dataSpent, backgroundColor: '#00A3E0', borderRadius: 4 }
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+        });
     }
 
     function renderUI() {
-        const sel1=document.getElementById('selCode'), sel2=document.getElementById('selCodeTransfer'), sel3=document.getElementById('detailSelectCode');
-        const c1=sel1.value, c2=sel2.value, c3=sel3.value;
-        const opts = '<option value="">-- Seleccionar Rubro --</option>';
-        sel1.innerHTML=opts; sel2.innerHTML=opts; sel3.innerHTML=opts;
+        const sel1=document.getElementById('selCode'), sel3=document.getElementById('detailSelectCode');
+        const c1=sel1.value, c3=sel3.value;
+        const opts = '<option value="">-- Seleccionar --</option>';
+        sel1.innerHTML=opts; sel3.innerHTML=opts;
+        
         budget.forEach(b => {
             const c = getSmartValue(b, ["CODIGO","Codigo"]);
             const d = getSmartValue(b, ["DESCRIPCION","Descripcion"])||"";
             if(c) {
                 const t = `${c} - ${d.substring(0,30)}`;
-                [sel1, sel2, sel3].forEach(s => { const o=document.createElement('option'); o.value=c; o.text=t; s.appendChild(o); });
+                [sel1, sel3].forEach(s => { const o=document.createElement('option'); o.value=c; o.text=t; s.appendChild(o); });
             }
         });
-        if(c1) sel1.value=c1; if(c2) sel2.value=c2; if(c3) sel3.value=c3;
+        if(c1) sel1.value=c1; if(c3) sel3.value=c3;
 
         const expMap = {};
         let tSpent = 0;
         expenses.forEach(x => {
             const d = getSmartValue(x, ["date","Date","fecha","FECHA"]); if(!d) return;
             const m = parseInt(d.split('-')[1])-1;
-            const c = getSmartValue(x, ["code","Code","codigo","CODIGO"]);
+            const c = String(getSmartValue(x, ["code","Code","codigo","CODIGO"])).trim();
             const a = parseMoney(getSmartValue(x, ["amount","Amount","monto","MONTO"]));
-            expMap[`${c}-${m}`] = (expMap[`${c}-${m}`]||0) + a;
+            const k = `${c}-${m}`;
+            expMap[k] = (expMap[k]||0) + a;
             tSpent += a;
         });
 
         const tb = document.querySelector('#mainTable tbody');
         tb.innerHTML = '';
         let tBud = 0;
-        
+
         budget.forEach(l => {
             const c = String(getSmartValue(l, ["CODIGO","Codigo"])).trim(); if(!c) return;
             const tr = document.createElement('tr');
-            let h = `<td class="tooltip-container"><b>${c}</b><span class="tooltip-text">${getSmartValue(l,["DESCRIPCION"])||""}</span></td>`;
+            let h = `<td><b>${c}</b></td>`;
             let rowSum = 0;
             for(let i=0; i<12; i++) {
                 let raw = getSmartValue(l, MONTH_POSSIBILITIES[i]);
@@ -575,7 +612,7 @@
 
         const th = document.querySelector('#histTable tbody');
         th.innerHTML = '';
-        [...expenses].sort((a,b)=>getSmartValue(b,["id"])-getSmartValue(a,["id"])).slice(0,20).forEach(x => {
+        [...expenses].reverse().slice(0,20).forEach(x => {
             const r = document.createElement('tr');
             const d = getSmartValue(x, ["date","Date","fecha"]);
             const cd = getSmartValue(x, ["code","Code","codigo"]);
@@ -590,19 +627,9 @@
             r.innerHTML = `<td>${d}</td><td>${cd}<br><small>${rf}</small></td><td class="money">${fmt(am)}</td><td><span class="status-badge ${badge}">${st}</span></td><td style="white-space:nowrap">${btn}<button class="danger action-btn" onclick="delExp(${id})">🗑️</button></td>`;
             th.appendChild(r);
         });
-
-        const tt = document.querySelector('#transfersTable tbody');
-        tt.innerHTML = '';
-        if(!transfers || transfers.length === 0) tt.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">Sin movimientos</td></tr>';
-        else {
-            [...transfers].reverse().slice(0,10).forEach(t => {
-                const r = document.createElement('tr');
-                r.innerHTML = `<td>${getSmartValue(t, ["Fecha","fecha"])}</td><td>${getSmartValue(t, ["Codigo","codigo"])}</td><td><span class="badge-transfer">${getSmartValue(t, ["Origen","origen"])} ➔ ${getSmartValue(t, ["Destino","destino"])}</span></td><td style="font-weight:bold">${fmt(getSmartValue(t, ["Valor","valor"]))}</td><td>${getSmartValue(t, ["Usuario","usuario"])}</td>`;
-                tt.appendChild(r);
-            });
-        }
     }
 
+    // RENDER DETALLE
     function renderDetailView() {
         const code = document.getElementById('detailSelectCode').value;
         if(!code) return;
@@ -618,7 +645,7 @@
 
         let totalSpent = 0;
         const specificExpenses = expenses.filter(x => String(getSmartValue(x, ["code","Code","codigo","CODIGO"])).trim() == String(code).trim());
-        specificExpenses.forEach(x => { totalSpent += parseMoney(getSmartValue(x, ["amount","Amount","monto","MONTO"])); });
+        specificExpenses.forEach(x => { totalSpent += parseMoney(getSmartValue(x, ["amount","Amount","monto"])); });
 
         document.getElementById('dTotal').innerText = fmt(totalBudget);
         document.getElementById('dSpent').innerText = fmt(totalSpent);
@@ -633,7 +660,6 @@
         tbody.innerHTML = '';
         if(specificExpenses.length === 0) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999">Sin gastos</td></tr>';
         else {
-            specificExpenses.sort((a,b) => new Date(getSmartValue(b,["date","fecha"])) - new Date(getSmartValue(a,["date","fecha"])));
             specificExpenses.forEach(x => {
                 const r = document.createElement('tr');
                 const st = getSmartValue(x, ["status","Estado","estado"]) || "OC";
@@ -642,22 +668,10 @@
                 tbody.appendChild(r);
             });
         }
-
-        const tbodyT = document.querySelector('#detailTransfersTable tbody');
-        tbodyT.innerHTML = '';
-        const specificTransfers = transfers.filter(t => String(getSmartValue(t, ["Codigo","CODIGO","codigo"])).trim() == String(code).trim());
-        if(specificTransfers.length === 0) tbodyT.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#999">Sin traslados</td></tr>';
-        else {
-            specificTransfers.reverse().forEach(t => {
-                const r = document.createElement('tr');
-                r.innerHTML = `<td>${getSmartValue(t,["Fecha","fecha"])}</td><td><span class="badge-transfer">${getSmartValue(t,["Origen","origen"])} ➔ ${getSmartValue(t,["Destino","destino"])}</span></td><td style="font-weight:bold">${fmt(getSmartValue(t,["Valor","valor"]))}</td><td>${getSmartValue(t,["Usuario","usuario"])}</td>`;
-                tbodyT.appendChild(r);
-            });
-        }
     }
 
     function fmt(n) { return new Intl.NumberFormat('es-CO', {maximumFractionDigits:0}).format(n); }
+    function downloadExcel() { alert("Función de descarga simplificada para esta versión."); }
 </script>
 </body>
 </html>
-
