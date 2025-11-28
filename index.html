@@ -44,7 +44,7 @@
         button.accent { background: var(--accent); color: white; width: 100%; font-size: 1em; }
         button.warning { background: var(--warning); color: white; width: 100%; }
         button.success { background: var(--success); color: white; font-size: 0.8em; padding: 5px 10px; }
-        button.danger { background: var(--danger); color: white; padding: 4px 8px; font-size: 0.75em; border-radius: 3px; }
+        button.danger { background: var(--danger); color: white; padding: 5px 10px; font-size: 0.8em; border-radius: 3px; }
         button.action-btn { margin-left: 5px; min-width: 30px; text-align: center; }
         button:hover { opacity: 0.9; transform: translateY(-1px); }
         button:disabled { background: #bdc3c7; cursor: not-allowed; transform: none; }
@@ -67,6 +67,14 @@
         .status-committed { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; } 
         .status-paid { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .badge-transfer { background: #fff3e0; color: #e67e22; padding: 4px 8px; border-radius: 12px; font-weight: bold; font-size: 0.85em; border: 1px solid #ffe0b2; }
+        
+        /* TOOLTIPS */
+        .tooltip-container { position: relative; display: inline-block; cursor: help; border-bottom: 1px dashed var(--accent); }
+        .tooltip-text { visibility: hidden; width: 250px; background-color: #002B5C; color: #fff; text-align: left; border-radius: 6px; padding: 10px; position: absolute; z-index: 100; bottom: 125%; left: 50%; margin-left: -125px; opacity: 0; transition: opacity 0.3s; font-size: 0.85em; font-weight: normal; box-shadow: 0 5px 15px rgba(0,0,0,0.3); line-height: 1.4; }
+        .tooltip-text::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #002B5C transparent transparent transparent; }
+        .tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; }
+        
+        /* PROGRESS BAR */
         .progress-bg { width: 100%; background: #e0e0e0; height: 12px; border-radius: 6px; margin-top: 5px; overflow: hidden; }
         .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.6s ease-out; }
         .progress-fill.danger { background: var(--danger); }
@@ -80,12 +88,6 @@
         .modal { background: white; padding: 30px; border-radius: 8px; width: 90%; max-width: 450px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); border-top: 6px solid var(--danger); animation: slideDown 0.3s ease; }
         @keyframes slideDown { from {transform: translateY(-30px); opacity:0;} to {transform: translateY(0); opacity:1;} }
         .transfer-box { background: #fff5f5; padding: 15px; border-radius: 5px; border: 1px solid #fed7d7; margin-top: 15px; }
-        
-        /* TOOLTIPS */
-        .tooltip-container { position: relative; display: inline-block; cursor: help; border-bottom: 1px dashed var(--accent); }
-        .tooltip-text { visibility: hidden; width: 250px; background-color: #002B5C; color: #fff; text-align: left; border-radius: 6px; padding: 10px; position: absolute; z-index: 100; bottom: 125%; left: 50%; margin-left: -125px; opacity: 0; transition: opacity 0.3s; font-size: 0.85em; font-weight: normal; box-shadow: 0 5px 15px rgba(0,0,0,0.3); line-height: 1.4; }
-        .tooltip-text::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #002B5C transparent transparent transparent; }
-        .tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; }
     </style>
 </head>
 <body>
@@ -125,7 +127,7 @@
 <div id="loader" style="display:none;">
     <div class="spinner"></div>
     <h3 style="color:var(--primary)">Procesando...</h3>
-    <p id="loadMsg" style="color:#7f8c8d">Conectando con base de datos segura...</p>
+    <p id="loadMsg" style="color:#7f8c8d">Conectando...</p>
 </div>
 
 <div id="alertModal" class="modal-overlay">
@@ -247,7 +249,7 @@
 <script>
     // ==================================================
     // ⚠️ PEGA TU URL DE GOOGLE SCRIPT AQUÍ ⚠️
-    const API_URL = "https://script.google.com/macros/s/AKfycbyz1IWA3LnxNF-J7ki4KdwmXJK1dMR5PMfavx8hFbd2OXyxn5219g3iVf4NxdgCSlY/exec"; 
+    const API_URL = "https://script.google.com/macros/s/AKfycbx.../exec"; 
     // ==================================================
 
     let budget = [], expenses = [], transfers = [];
@@ -277,39 +279,42 @@
         });
     }
 
+    // --- UTILIDADES SEGURAS (BLINDADAS) ---
     function formatCurrencyInput(input) {
         let val = input.value.replace(/\D/g, '');
         if(val==="") { input.value=""; return; }
         input.value = new Intl.NumberFormat('es-CO').format(parseInt(val));
     }
-    function parseMoney(val) {
-        if(!val) return 0;
-        if(typeof val === 'number') return val;
+    
+    // Limpieza de números segura
+    function cleanNum(val) {
+        if (val === undefined || val === null) return 0;
+        if (typeof val === 'number') return val;
         let s = String(val).replace(/\./g, '').replace(/,/g, '.');
         return parseFloat(s) || 0;
     }
+
     function getAmountValue(id) { 
         const el = document.getElementById(id);
-        return parseMoney(el.value);
+        if(!el) return 0;
+        return cleanNum(el.value);
     }
-function getSmartValue(obj, keys) {
-        // BLINDAJE: Si el objeto es nulo o indefinido, salimos sin error
-        if (!obj || typeof obj !== 'object') return undefined;
-        
+
+    function getSmartValue(obj, keys) {
+        if(!obj || typeof obj !== 'object') return undefined;
         const objKeys = Object.keys(obj);
-        for (const k of keys) {
-            // Búsqueda segura con conversión a String para evitar errores de tipo
+        for(const k of keys) {
             const found = objKeys.find(ok => String(ok).trim().toUpperCase() === String(k).trim().toUpperCase());
-            if (found) return obj[found];
+            if(found) return obj[found];
         }
         return undefined;
     }
-function detectMonthHeaders(sampleRow) {
-        if (!sampleRow || typeof sampleRow !== 'object') return; // Protección
-        
+    
+    function detectMonthHeaders(sampleRow) {
+        if(!sampleRow) return;
         const keys = Object.keys(sampleRow);
         MONTH_POSSIBILITIES.forEach((possibles, idx) => {
-            const found = keys.find(k => possibles.includes(k.trim().toUpperCase()));
+            const found = keys.find(k => possibles.includes(String(k).trim().toUpperCase()));
             if(found) DETECTED_HEADERS[idx] = found;
         });
     }
@@ -371,19 +376,22 @@ function detectMonthHeaders(sampleRow) {
         const dateStr = document.getElementById('date').value;
         const ref = document.getElementById('ref').value;
         const status = document.getElementById('status').value;
-        const mIdx = parseInt(dateStr.split('-')[1])-1;
+        
+        // Validación de fecha segura
+        if(!dateStr) { alert("Selecciona una fecha"); btn.disabled=false; return; }
+        const mIdx = parseInt(dateStr.split('-')[1]) - 1;
         
         const line = budget.find(b => String(getSmartValue(b, ["CODIGO","Codigo","Code"])).trim() == String(code).trim());
         if(!line) { alert("Código no encontrado"); btn.disabled=false; btn.innerText="Validar"; return; }
         
-        const budMonth = parseMoney(getSmartValue(line, MONTH_POSSIBILITIES[mIdx]));
+        const budMonth = cleanNum(getSmartValue(line, MONTH_POSSIBILITIES[mIdx]));
         
         let spent = 0;
         expenses.forEach(x => {
             const c = String(getSmartValue(x,["code","Code","codigo","CODIGO"])).trim();
             const d = getSmartValue(x,["date","Date","fecha","FECHA"]);
             if(c==code && d && (parseInt(d.split('-')[1])-1)==mIdx) 
-                spent += parseMoney(getSmartValue(x,["amount","Amount","monto","MONTO"]));
+                spent += cleanNum(getSmartValue(x,["amount","Amount","monto","MONTO"]));
         });
 
         if(amount > (budMonth - spent)) {
@@ -420,14 +428,14 @@ function detectMonthHeaders(sampleRow) {
         const line = budget.find(b => String(getSmartValue(b, ["CODIGO","Codigo"])) == String(code));
         const colSrc = DETECTED_HEADERS[sIdx], colTgt = DETECTED_HEADERS[tIdx];
         
-        const budSrc = parseMoney(line[colSrc]);
+        const budSrc = cleanNum(line[colSrc]);
         
         let spentSrc = 0;
         expenses.forEach(x => {
             const c = String(getSmartValue(x,["code","Code","codigo","CODIGO"])).trim();
             const d = getSmartValue(x,["date","Date","fecha","FECHA"]);
             if(c==code && d && (parseInt(d.split('-')[1])-1)==sIdx)
-                spentSrc += parseMoney(getSmartValue(x,["amount","Amount","monto","MONTO"]));
+                spentSrc += cleanNum(getSmartValue(x,["amount","Amount","monto","MONTO"]));
         });
 
         if(amount > (budSrc - spentSrc)) {
@@ -436,8 +444,8 @@ function detectMonthHeaders(sampleRow) {
         }
 
         try {
-            let vSrc = parseMoney(line[colSrc]);
-            let vTgt = parseMoney(line[colTgt]);
+            let vSrc = cleanNum(line[colSrc]);
+            let vTgt = cleanNum(line[colTgt]);
             
             await apiCall({
                 action: 'transferBudget',
@@ -469,12 +477,8 @@ function detectMonthHeaders(sampleRow) {
         
         const data = { 
             id: Date.now(), 
-            codigo: code, 
-            referencia: ref, 
-            monto: amount, 
-            fecha: date, 
-            usuario: user, 
-            estado: status 
+            codigo: code, ref: ref, monto: amount, fecha: date, 
+            usuario: user, estado: status 
         };
         
         try {
@@ -520,7 +524,7 @@ function detectMonthHeaders(sampleRow) {
             const d = getSmartValue(x, ["date","Date","fecha","FECHA"]); if(!d) return;
             const m = parseInt(d.split('-')[1])-1;
             const c = String(getSmartValue(x, ["code","Code","codigo","CODIGO"])).trim();
-            const a = parseMoney(getSmartValue(x, ["amount","Amount","monto","MONTO"]));
+            const a = cleanNum(getSmartValue(x, ["amount","Amount","monto","MONTO"]));
             expMap[`${c}-${m}`] = (expMap[`${c}-${m}`]||0) + a;
             tSpent += a;
         });
@@ -536,13 +540,13 @@ function detectMonthHeaders(sampleRow) {
             let rowSum = 0;
             for(let i=0; i<12; i++) {
                 let raw = getSmartValue(l, MONTH_POSSIBILITIES[i]);
-                let b = parseMoney(raw);
+                let b = cleanNum(raw);
                 rowSum += b;
                 let s = expMap[`${c}-${i}`]||0;
                 let clr = s > b ? '#e74c3c' : (s > 0 ? '#27ae60' : '#95a5a6');
                 h += `<td>${b?fmt(b):'-'}<br><span style="color:${clr};font-weight:bold;font-size:0.85em">${s?fmt(s):''}</span></td>`;
             }
-            let tot = parseMoney(getSmartValue(l, ["TOTAL","Total"]));
+            let tot = cleanNum(getSmartValue(l, ["TOTAL","Total"]));
             if(tot===0) tot = rowSum;
             tBud += tot;
             h += `<td><b>${fmt(tot)}</b></td>`;
@@ -556,13 +560,13 @@ function detectMonthHeaders(sampleRow) {
 
         const th = document.querySelector('#histTable tbody');
         th.innerHTML = '';
-        [...expenses].sort((a,b)=>getSmartValue(b,["id"])-getSmartValue(a,["id"])).slice(0,20).forEach(x => {
+        [...expenses].sort((a,b)=>cleanNum(getSmartValue(b,["id"]))-cleanNum(getSmartValue(a,["id"]))).slice(0,20).forEach(x => {
             const r = document.createElement('tr');
             const d = getSmartValue(x, ["date","Date","fecha"]);
             const cd = getSmartValue(x, ["code","Code","codigo"]);
             const u = getSmartValue(x, ["user","User","usuario"])||"JIAT";
             const rf = getSmartValue(x, ["ref","Ref","referencia"]);
-            const am = parseMoney(getSmartValue(x, ["amount","Amount","monto"]));
+            const am = cleanNum(getSmartValue(x, ["amount","Amount","monto"]));
             const id = getSmartValue(x, ["id","ID"]);
             const st = getSmartValue(x, ["status","Status","estado"])||"OC";
             const isPaid = st.toUpperCase()==="PAGADO";
@@ -594,12 +598,12 @@ function detectMonthHeaders(sampleRow) {
 
         let totalBudget = 0;
         for(let i=0; i<12; i++) {
-            totalBudget += parseMoney(getSmartValue(line, MONTH_POSSIBILITIES[i]));
+            totalBudget += cleanNum(getSmartValue(line, MONTH_POSSIBILITIES[i]));
         }
 
         let totalSpent = 0;
         const specificExpenses = expenses.filter(x => String(getSmartValue(x, ["code","Code","codigo","CODIGO"])).trim() == String(code).trim());
-        specificExpenses.forEach(x => { totalSpent += parseMoney(getSmartValue(x, ["amount","Amount","monto"])); });
+        specificExpenses.forEach(x => { totalSpent += cleanNum(getSmartValue(x, ["amount","Amount","monto"])); });
 
         document.getElementById('dTotal').innerText = fmt(totalBudget);
         document.getElementById('dSpent').innerText = fmt(totalSpent);
@@ -619,7 +623,7 @@ function detectMonthHeaders(sampleRow) {
                 const r = document.createElement('tr');
                 const st = getSmartValue(x, ["status","Estado","estado"]) || "OC";
                 const stClass = st==="PAGADO"?"status-paid":"status-committed";
-                r.innerHTML = `<td>${getSmartValue(x,["date","Date","fecha"])}</td><td>${getSmartValue(x,["ref","referencia"])}</td><td>${getSmartValue(x,["user","usuario"])||"JIAT"}</td><td class="money">${fmt(getSmartValue(x,["amount","monto"]))}</td><td><span class="status-badge ${stClass}">${st}</span></td>`;
+                r.innerHTML = `<td>${getSmartValue(x,["date","fecha"])}</td><td>${getSmartValue(x,["ref","referencia"])}</td><td>${getSmartValue(x,["user","usuario"])||"JIAT"}</td><td class="money">${fmt(getSmartValue(x,["amount","monto"]))}</td><td><span class="status-badge ${stClass}">${st}</span></td>`;
                 tbody.appendChild(r);
             });
         }
@@ -637,29 +641,25 @@ function detectMonthHeaders(sampleRow) {
         }
     }
 
-    // --- CHART ---
     function updateChart() {
         if(typeof Chart==='undefined') return;
         const ctx = document.getElementById('budgetChart').getContext('2d');
         let dataBudget = new Array(12).fill(0), dataSpent = new Array(12).fill(0);
-        
         budget.forEach(b => {
             for(let i=0; i<12; i++) {
                 let raw = getSmartValue(b, MONTH_POSSIBILITIES[i]);
-                dataBudget[i] += parseMoney(raw);
+                dataBudget[i] += cleanNum(raw);
             }
         });
-
         expenses.forEach(x => {
             const d = getSmartValue(x, ["date","Date","fecha","FECHA"]);
             if(d) {
                 let parts = d.includes('/') ? d.split('/') : d.split('-');
                 const mIdx = parseInt(parts[1]) - 1;
-                const amt = parseMoney(getSmartValue(x, ["amount","Amount","monto","MONTO"]));
+                const amt = cleanNum(getSmartValue(x, ["amount","Amount","monto","MONTO"]));
                 if(mIdx >= 0 && mIdx < 12) dataSpent[mIdx] += amt;
             }
         });
-
         if(myChart) myChart.destroy();
         myChart = new Chart(ctx, {
             type: 'bar',
@@ -679,4 +679,3 @@ function detectMonthHeaders(sampleRow) {
 </script>
 </body>
 </html>
-
