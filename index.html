@@ -139,7 +139,7 @@
         </div>
         <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:25px;">
             <button onclick="closeModal()" style="background:#ecf0f1; color:#7f8c8d">Cancelar</button>
-            <button onclick="executeTransfer()" class="accent" style="background:var(--success)">✅ Autorizar y Guardar</button>
+            <button onclick="executeTransfer()" class="accent" style="background:var(--success)">✅ Autorizar</button>
         </div>
     </div>
 </div>
@@ -277,7 +277,6 @@
         });
     }
 
-    // --- UTILIDADES DE FORMATO ---
     function formatCurrencyInput(input) {
         let val = input.value.replace(/\D/g, '');
         if(val==="") { input.value=""; return; }
@@ -316,14 +315,12 @@
         if(typeof Chart==='undefined') return;
         const ctx = document.getElementById('budgetChart').getContext('2d');
         let dataBudget = new Array(12).fill(0), dataSpent = new Array(12).fill(0);
-        
         budget.forEach(b => {
             for(let i=0; i<12; i++) {
                 let raw = getSmartValue(b, MONTH_POSSIBILITIES[i]);
                 dataBudget[i] += parseMoney(raw);
             }
         });
-
         expenses.forEach(x => {
             const d = getSmartValue(x, ["date","Date","fecha","FECHA"]);
             if(d) {
@@ -333,7 +330,6 @@
                 if(mIdx >= 0 && mIdx < 12) dataSpent[mIdx] += amt;
             }
         });
-
         if(myChart) myChart.destroy();
         myChart = new Chart(ctx, {
             type: 'bar',
@@ -372,7 +368,6 @@
         if(showLoaderUI) document.getElementById('loader').style.display = 'none';
     }
 
-    // --- VALIDACIÓN ---
     async function tryAddExpense(e) {
         e.preventDefault();
         const btn = document.getElementById('btnSave');
@@ -407,17 +402,11 @@
         }
     }
 
-    // --- PAGAR / LEGALIZAR ---
     async function markAsPaid(id) {
         if(!confirm("¿Confirmar pago?")) return;
         document.getElementById('loader').style.display = 'flex';
         try {
-            // Usamos la columna 'id' (minúscula) que es el estándar
-            await fetch(`${API_URL}/id/${id}?sheet=Gastos`, { 
-                method: 'PATCH', 
-                headers: {'Content-Type':'application/json'}, 
-                body: JSON.stringify({data: { "estado": "PAGADO" }}) 
-            });
+            await fetch(`${API_URL}/id/${id}?sheet=Gastos`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({data: { "estado": "PAGADO" }}) });
             alert("✅ Actualizado"); syncData(true);
         } catch(e) { alert("Error: "+e.message); document.getElementById('loader').style.display='none'; }
     }
@@ -465,7 +454,7 @@
                 method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({data: upd})
             });
             
-            const log = { "Fecha": new Date().toISOString().split('T')[0], "Codigo": code, "Origen": colSrc, "Destino": colTgt, "Valor": amount, "Usuario": user };
+            const log = { "fecha": new Date().toISOString().split('T')[0], "codigo": code, "origen": colSrc, "destino": colTgt, "valor": amount, "usuario": user };
             await fetch(`${API_URL}?sheet=Traslados`, {
                 method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({data: [log]})
             });
@@ -481,7 +470,7 @@
         const user = document.getElementById('uName').value;
         localStorage.setItem('u', user);
         
-        // ENVIAMOS NOMBRES EN MINÚSCULA EXACTOS
+        // BLINDADO: Nombres exactos y duplicados para asegurar compatibilidad
         const data = { 
             "id": Date.now(), 
             "codigo": code, 
@@ -495,10 +484,9 @@
         try {
             const res = await fetch(`${API_URL}?sheet=Gastos`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({data: [data]}) });
             
-            // Verificamos la respuesta de SheetDB
             if(!res.ok) {
-                const errText = await res.text();
-                throw new Error(errText || "Error Save");
+                const txt = await res.text();
+                throw new Error(txt || "Error Save");
             }
             
             await syncData(false);
@@ -517,7 +505,6 @@
         document.getElementById('loader').style.display='none';
     }
 
-    // --- RENDERIZADO ---
     function renderUI() {
         const sel1=document.getElementById('selCode'), sel2=document.getElementById('selCodeTransfer'), sel3=document.getElementById('detailSelectCode');
         const c1=sel1.value, c2=sel2.value, c3=sel3.value;
@@ -527,7 +514,7 @@
             const c = getSmartValue(b, ["CODIGO","Codigo"]);
             const d = getSmartValue(b, ["DESCRIPCION","Descripcion"])||"";
             if(c) {
-                const t = `${c} - ${d.substring(0,30)}`;
+                const t = `${c} - ${d.substring(0,35)}`;
                 [sel1, sel2, sel3].forEach(s => { const o=document.createElement('option'); o.value=c; o.text=t; s.appendChild(o); });
             }
         });
@@ -538,7 +525,7 @@
         expenses.forEach(x => {
             const d = getSmartValue(x, ["date","Date","fecha","FECHA"]); if(!d) return;
             const m = parseInt(d.split('-')[1])-1;
-            const c = getSmartValue(x, ["code","Code","codigo","CODIGO"]);
+            const c = String(getSmartValue(x, ["code","Code","codigo","CODIGO"])).trim();
             const a = parseMoney(getSmartValue(x, ["amount","Amount","monto","MONTO"]));
             expMap[`${c}-${m}`] = (expMap[`${c}-${m}`]||0) + a;
             tSpent += a;
@@ -549,13 +536,13 @@
         let tBud = 0;
         
         budget.forEach(l => {
-            const c = getSmartValue(l, ["CODIGO","Codigo"]); if(!c) return;
+            const c = String(getSmartValue(l, ["CODIGO","Codigo"])).trim(); if(!c) return;
             const tr = document.createElement('tr');
             let h = `<td class="tooltip-container"><b>${c}</b><span class="tooltip-text">${getSmartValue(l,["DESCRIPCION"])||""}</span></td>`;
             let rowSum = 0;
             for(let i=0; i<12; i++) {
-                let val = getSmartValue(l, MONTH_POSSIBILITIES[i]);
-                let b = parseMoney(val);
+                let raw = getSmartValue(l, MONTH_POSSIBILITIES[i]);
+                let b = parseMoney(raw);
                 rowSum += b;
                 let s = expMap[`${c}-${i}`]||0;
                 let clr = s > b ? '#e74c3c' : (s > 0 ? '#27ae60' : '#95a5a6');
@@ -573,28 +560,23 @@
         document.getElementById('kAvail').innerText = fmt(tBud-tSpent);
         document.getElementById('kPerc').innerText = tBud>0 ? ((tSpent/tBud)*100).toFixed(1)+"%" : "0%";
 
-        // GASTOS
         const th = document.querySelector('#histTable tbody');
         th.innerHTML = '';
         [...expenses].sort((a,b)=>getSmartValue(b,["id"])-getSmartValue(a,["id"])).slice(0,20).forEach(x => {
             const r = document.createElement('tr');
-            const d = getSmartValue(x, ["date","Date","fecha"]);
-            const cd = getSmartValue(x, ["code","Code","codigo"]);
-            const u = getSmartValue(x, ["user","User","usuario"])||"JIAT";
-            const rf = getSmartValue(x, ["ref","Ref","referencia"]);
-            const am = parseMoney(getSmartValue(x, ["amount","Amount","monto"]));
+            const d = getSmartValue(x, ["date","Date","fecha","FECHA"]);
+            const cd = getSmartValue(x, ["code","Code","codigo","CODIGO"]);
+            const rf = getSmartValue(x, ["ref","Ref","referencia","REFERENCIA"]);
+            const am = parseMoney(getSmartValue(x, ["amount","Amount","monto","MONTO"]));
             const id = getSmartValue(x, ["id","ID"]);
-            
-            const st = getSmartValue(x, ["status","Status","estado"]) || "OC";
-            const isPaid = st.toUpperCase() === "PAGADO";
+            const st = getSmartValue(x, ["status","Status","estado","ESTADO"])||"OC";
+            const isPaid = st.toUpperCase()==="PAGADO";
             const badge = isPaid ? "status-paid" : "status-committed";
             const btn = !isPaid ? `<button class="success action-btn" onclick="markAsPaid(${id})">✅</button>` : '';
-            
             r.innerHTML = `<td>${d}</td><td>${cd}<br><small>${rf}</small></td><td class="money">${fmt(am)}</td><td><span class="status-badge ${badge}">${st}</span></td><td style="white-space:nowrap">${btn}<button class="danger action-btn" onclick="delExp(${id})">🗑️</button></td>`;
             th.appendChild(r);
         });
 
-        // TRASLADOS
         const tt = document.querySelector('#transfersTable tbody');
         tt.innerHTML = '';
         if(!transfers || transfers.length === 0) tt.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">Sin movimientos</td></tr>';
@@ -603,61 +585,6 @@
                 const r = document.createElement('tr');
                 r.innerHTML = `<td>${getSmartValue(t, ["Fecha","fecha"])}</td><td>${getSmartValue(t, ["Codigo","codigo"])}</td><td><span class="badge-transfer">${getSmartValue(t, ["Origen","origen"])} ➔ ${getSmartValue(t, ["Destino","destino"])}</span></td><td style="font-weight:bold">${fmt(getSmartValue(t, ["Valor","valor"]))}</td><td>${getSmartValue(t, ["Usuario","usuario"])}</td>`;
                 tt.appendChild(r);
-            });
-        }
-    }
-
-    function renderDetailView() {
-        const code = document.getElementById('detailSelectCode').value;
-        if(!code) return;
-        document.getElementById('detailPanel').style.display = 'block';
-        
-        const line = budget.find(b => String(getSmartValue(b, ["CODIGO","Codigo"])).trim() == String(code).trim());
-        if(!line) return;
-
-        let totalBudget = 0;
-        for(let i=0; i<12; i++) {
-            totalBudget += parseMoney(getSmartValue(line, MONTH_POSSIBILITIES[i]));
-        }
-
-        let totalSpent = 0;
-        const specificExpenses = expenses.filter(x => String(getSmartValue(x, ["code","Code","codigo","CODIGO"])).trim() == String(code).trim());
-        specificExpenses.forEach(x => { totalSpent += parseMoney(getSmartValue(x, ["amount","Amount","monto","MONTO"])); });
-
-        document.getElementById('dTotal').innerText = fmt(totalBudget);
-        document.getElementById('dSpent').innerText = fmt(totalSpent);
-        document.getElementById('dAvail').innerText = fmt(totalBudget - totalSpent);
-
-        let perc = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
-        if(perc>100) perc=100;
-        const bar = document.getElementById('dProgress');
-        bar.style.width = perc + "%";
-        bar.className = perc > 90 ? "progress-fill danger" : "progress-fill";
-        document.getElementById('dPercText').innerText = perc.toFixed(1) + "%";
-
-        const tbody = document.querySelector('#detailTable tbody');
-        tbody.innerHTML = '';
-        if(specificExpenses.length === 0) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999">Sin gastos</td></tr>';
-        else {
-            specificExpenses.sort((a,b) => new Date(getSmartValue(b,["date","fecha"])) - new Date(getSmartValue(a,["date","fecha"])));
-            specificExpenses.forEach(x => {
-                const r = document.createElement('tr');
-                const st = getSmartValue(x, ["status","Estado","estado"]) || "OC";
-                const stClass = st==="PAGADO"?"status-paid":"status-committed";
-                r.innerHTML = `<td>${getSmartValue(x,["date","Date","fecha"])}</td><td>${getSmartValue(x,["ref","Ref","referencia"])}</td><td>${getSmartValue(x,["user","User","usuario"])||"JIAT"}</td><td class="money">${fmt(getSmartValue(x,["amount","Amount","monto"]))}</td><td><span class="status-badge ${stClass}">${st}</span></td>`;
-                tbody.appendChild(r);
-            });
-        }
-        
-        const tbodyT = document.querySelector('#detailTransfersTable tbody');
-        tbodyT.innerHTML = '';
-        const specificTransfers = transfers.filter(t => String(getSmartValue(t, ["Codigo","CODIGO","codigo"])).trim() == String(code).trim());
-        if(specificTransfers.length === 0) tbodyT.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#999">Sin traslados</td></tr>';
-        else {
-            specificTransfers.reverse().forEach(t => {
-                const r = document.createElement('tr');
-                r.innerHTML = `<td>${getSmartValue(t,["Fecha","fecha"])}</td><td><span class="badge-transfer">${getSmartValue(t,["Origen","origen"])} ➔ ${getSmartValue(t,["Destino","destino"])}</span></td><td style="font-weight:bold">${fmt(getSmartValue(t,["Valor","valor"]))}</td><td>${getSmartValue(t,["Usuario","usuario"])}</td>`;
-                tbodyT.appendChild(r);
             });
         }
     }
