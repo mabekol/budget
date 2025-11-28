@@ -292,17 +292,21 @@
         const el = document.getElementById(id);
         return parseMoney(el.value);
     }
-    function getSmartValue(obj, keys) {
-        if(!obj) return undefined;
+function getSmartValue(obj, keys) {
+        // BLINDAJE: Si el objeto es nulo o indefinido, salimos sin error
+        if (!obj || typeof obj !== 'object') return undefined;
+        
         const objKeys = Object.keys(obj);
-        for(const k of keys) {
-            const found = objKeys.find(ok => String(ok).trim().toUpperCase() === k.toUpperCase());
-            if(found) return obj[found];
+        for (const k of keys) {
+            // Búsqueda segura con conversión a String para evitar errores de tipo
+            const found = objKeys.find(ok => String(ok).trim().toUpperCase() === String(k).trim().toUpperCase());
+            if (found) return obj[found];
         }
         return undefined;
     }
-    function detectMonthHeaders(sampleRow) {
-        if(!sampleRow) return;
+function detectMonthHeaders(sampleRow) {
+        if (!sampleRow || typeof sampleRow !== 'object') return; // Protección
+        
         const keys = Object.keys(sampleRow);
         MONTH_POSSIBILITIES.forEach((possibles, idx) => {
             const found = keys.find(k => possibles.includes(k.trim().toUpperCase()));
@@ -675,3 +679,4 @@
 </script>
 </body>
 </html>
+
