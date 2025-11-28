@@ -69,4 +69,551 @@
         
         /* TOOLTIPS */
         .tooltip-container { position: relative; display: inline-block; cursor: help; border-bottom: 1px dashed var(--accent); }
-        .tooltip-text { visibility: hidden; width: 250px; background-color: #002B5C; color: #fff; text-align
+        .tooltip-text { visibility: hidden; width: 250px; background-color: #002B5C; color: #fff; text-align: left; border-radius: 6px; padding: 10px; position: absolute; z-index: 100; bottom: 125%; left: 50%; margin-left: -125px; opacity: 0; transition: opacity 0.3s; font-size: 0.85em; font-weight: normal; box-shadow: 0 5px 15px rgba(0,0,0,0.3); line-height: 1.4; }
+        .tooltip-text::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #002B5C transparent transparent transparent; }
+        .tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; }
+
+        /* LOADER & MODAL */
+        #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 999; display: none; }
+        .spinner { width: 40px; height: 40px; border: 4px solid #ecf0f1; border-top: 4px solid var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 15px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,43,92,0.6); display:none; justify-content:center; align-items:center; z-index:1000; backdrop-filter: blur(3px); }
+        .modal { background: white; padding: 30px; border-radius: 8px; width: 90%; max-width: 450px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); border-top: 6px solid var(--danger); animation: slideDown 0.3s ease; }
+        @keyframes slideDown { from {transform: translateY(-30px); opacity:0;} to {transform: translateY(0); opacity:1;} }
+        .transfer-box { background: #fff5f5; padding: 15px; border-radius: 5px; border: 1px solid #fed7d7; margin-top: 15px; }
+    </style>
+</head>
+<body>
+
+<div id="loginScreen" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#002B5C; z-index:9999; display:flex; flex-direction:column; justify-content:center; align-items:center; color:white;">
+    <h1 style="color:#00A3E0; margin-bottom:10px;">Saint Aubin <span style="color:white">Intranet</span></h1>
+    <p style="opacity:0.8; margin-bottom:20px;">Ingreso exclusivo personal autorizado</p>
+    <input type="password" id="passInput" placeholder="Contraseña" style="width:250px; text-align:center; padding:15px; border-radius:30px; border:none;">
+    <button onclick="checkPass()" style="margin-top:20px; background:#00A3E0; color:white; border:none; padding:12px 40px; font-weight:bold; cursor:pointer; border-radius:30px; transition:0.3s;">ENTRAR</button>
+    <p id="loginMsg" style="color:#ff6b6b; margin-top:15px; display:none; font-weight:bold;">⚠️ Contraseña Incorrecta</p>
+</div>
+
+<script>
+    function checkPass() {
+        if(document.getElementById('passInput').value === "SaintAubin2025") {
+            document.getElementById('loginScreen').style.display = 'none';
+            localStorage.setItem('auth', 'true');
+            unlockApp();
+        } else {
+            document.getElementById('loginMsg').style.display = 'block';
+        }
+    }
+    function logout() { localStorage.removeItem('auth'); location.reload(); }
+    window.onload = function() {
+        if(localStorage.getItem('auth') === 'true') {
+            document.getElementById('loginScreen').style.display = 'none';
+            unlockApp();
+        }
+        setTimeout(() => {
+            if(document.getElementById('loginScreen').style.display === 'none') {
+                document.getElementById('mainContainer').style.display = 'block';
+            }
+        }, 3000);
+    };
+</script>
+
+<div id="loader"><div class="spinner"></div><h3 style="color:var(--primary)">Procesando...</h3><p id="loadMsg" style="color:#7f8c8d">Sincronizando...</p></div>
+
+<div id="alertModal" class="modal-overlay">
+    <div class="modal">
+        <h3>⚠️ Saldo Insuficiente</h3>
+        <p>No tienes fondos en <b id="modalTargetMonth"></b>.</p>
+        <p>Faltan: <b id="modalMissing" style="color:var(--danger)"></b></p>
+        <div class="transfer-box">
+            <label style="color:var(--danger)">Autorizar traslado desde:</label>
+            <select id="modalSourceMonth" style="background:white;"></select>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:25px;">
+            <button onclick="closeModal()" style="background:#ecf0f1; color:#7f8c8d">Cancelar</button>
+            <button onclick="executeTransfer()" class="accent" style="background:var(--success)">✅ Autorizar</button>
+        </div>
+    </div>
+</div>
+
+<div class="container" id="mainContainer" style="display:none;">
+    <div class="header">
+        <div class="brand"><h1>Saint Aubin <span>International</span></h1></div>
+        <div style="display:flex; gap:10px;">
+            <button onclick="syncData(true)" class="primary">🔄 Actualizar</button>
+            <button onclick="logout()" style="background:#BDC3C7; color:#555;">🔒 Salir</button>
+        </div>
+    </div>
+
+    <div class="dashboard-grid">
+        <div class="card">
+            <h2>Tendencia Mensual</h2>
+            <div style="height: 250px; position: relative;"><canvas id="budgetChart"></canvas></div>
+        </div>
+        <div class="kpi-container">
+            <div class="kpi-card"><small>Presupuesto Total</small><div class="kpi-val" id="kTotal">$0</div></div>
+            <div class="kpi-card"><small>Disponible Real</small><div class="kpi-val" id="kAvail">$0</div></div>
+            <div class="kpi-card"><small>% Ejecución</small><div class="kpi-val" id="kPerc" style="color:var(--accent)">0%</div></div>
+        </div>
+    </div>
+
+    <div class="grid">
+        <div class="card">
+            <h2>Registrar Gasto</h2>
+            <form onsubmit="tryAddExpense(event)">
+                <div style="display:flex; gap:15px;">
+                    <div style="flex:1;"><label>Solicitante</label><select id="uName" required><option value="JIAT" selected>JIAT</option><option value="MBR">MBR</option></select></div>
+                    <div style="flex:1;"><label>Estado</label><select id="status" required><option value="OC">Orden de Compra</option><option value="PAGADO">Factura / Pagado</option></select></div>
+                </div>
+                
+                <label>Rubro</label><select id="selCode" required><option>Cargando...</option></select>
+                <label>Referencia</label><input type="text" id="ref" placeholder="Ej: OC-1001" required>
+                
+                <div style="display:flex; gap:15px;">
+                    <div style="flex:1"><label>Monto ($)</label><input type="text" id="amtDisplay" placeholder="0" required oninput="formatCurrencyInput(this)"></div>
+                    <div style="flex:1"><label>Fecha</label><input type="date" id="date" required></div>
+                </div>
+                <button type="submit" id="btnSave" class="accent">Validar</button>
+            </form>
+        </div>
+        <div class="card">
+            <h2>Últimos Gastos</h2>
+            <div class="table-wrap" style="max-height:380px">
+                <table id="histTable"><thead><tr><th>Fecha</th><th>Cód</th><th>Ref</th><th>Monto</th><th>Est</th><th></th></tr></thead><tbody></tbody></table>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Ejecución Mensual <button onclick="downloadExcel()" class="success" style="float:right;">📥 Excel</button></h2>
+        <div class="table-wrap"><table id="mainTable"><thead><tr><th>Cód</th><th>Ene</th><th>Feb</th><th>Mar</th><th>Abr</th><th>May</th><th>Jun</th><th>Jul</th><th>Ago</th><th>Sep</th><th>Oct</th><th>Nov</th><th>Dic</th><th>Total</th></tr></thead><tbody></tbody></table></div>
+    </div>
+
+    <div class="grid">
+        <div class="card transfer-zone">
+            <h2>Módulo de Traslados</h2>
+            <form onsubmit="handleTransfer(event)">
+                <label>Rubro</label><select id="selCodeTransfer" required><option>Cargando...</option></select>
+                <div style="display:flex; gap:10px;">
+                    <div style="flex:1"><label>Origen</label><select id="monthSource" required></select></div>
+                    <div style="flex:1"><label>Destino</label><select id="monthTarget" required></select></div>
+                </div>
+                <label>Valor ($)</label><input type="text" id="amtTransfer" placeholder="0" required oninput="formatCurrencyInput(this)">
+                <button type="submit" class="warning">Autorizar</button>
+            </form>
+        </div>
+        <div class="card transfer-zone">
+            <h2>Bitácora Traslados</h2>
+            <div class="table-wrap" style="max-height:300px"><table id="transfersTable"><thead><tr><th>Fecha</th><th>Cód</th><th>Movimiento</th><th>Valor</th><th>User</th></tr></thead><tbody></tbody></table></div>
+        </div>
+    </div>
+
+    <div class="card analysis-zone" style="margin-top: 25px;">
+        <h2>🔍 Análisis Detallado</h2>
+        <div style="display:flex; gap:15px; align-items:flex-end; margin-bottom:20px;">
+            <div style="flex:1;"><label>Rubro:</label><select id="detailSelectCode" onchange="renderDetailView()" style="margin-bottom:0; border:2px solid var(--primary);"></select></div>
+            <button onclick="renderDetailView()" class="primary">Ver</button>
+        </div>
+        <div id="detailPanel" style="display:none;">
+            <div class="kpi-box" style="background:white; border:1px solid #eee; margin-bottom:20px;">
+                <div><small>Anual</small><div class="kpi-val" id="dTotal">$0</div></div>
+                <div><small>Gastado</small><div class="kpi-val" id="dSpent" style="color:var(--danger)">$0</div></div>
+                <div><small>Saldo</small><div class="kpi-val" id="dAvail" style="color:var(--success)">$0</div></div>
+            </div>
+            <div class="table-wrap" style="max-height:250px;">
+                <table id="detailTable"><thead><tr><th>Fecha</th><th>Ref</th><th>Solicitante</th><th>Monto</th><th>Estado</th></tr></thead><tbody></tbody></table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ==================================================
+    // ⚠️ PEGA TU URL DE SHEETDB AQUÍ ⚠️
+    const API_URL = "https://sheetdb.io/api/v1/sw4ed7qqbxl4k";
+    // ==================================================
+
+    let budget = [], expenses = [], transfers = [];
+    let DETECTED_HEADERS = new Array(12).fill(null); 
+    let myChart = null;
+    const MONTH_POSSIBILITIES = [["ENERO","Enero","ENE","JAN"],["FEBRERO","Febrero","FEB"],["MARZO","Marzo","MAR"],["ABRIL","Abril","ABR","APR"],["MAYO","Mayo","MAY"],["JUNIO","Junio","JUN"],["JULIO","Julio","JUL"],["AGOSTO","Agosto","AGO","AUG"],["SEPTIEMBRE","Septiembre","SEP"],["OCTUBRE","Octubre","OCT"],["NOVIEMBRE","Noviembre","NOV"],["DICIEMBRE","Diciembre","DIC"]];
+    const MONTH_LABELS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+    let pendingExpense = null;
+
+    function unlockApp() {
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('mainContainer').style.display = 'block';
+        const u = localStorage.getItem('u');
+        if(u && (u==="JIAT"||u==="MBR")) document.getElementById('uName').value = u;
+        document.getElementById('date').valueAsDate = new Date();
+        populateMonthSelects();
+        syncData(true);
+    }
+
+    function populateMonthSelects() {
+        const s1 = document.getElementById('monthSource'), s2 = document.getElementById('monthTarget');
+        s1.innerHTML = '<option value="">Sel. Mes</option>'; s2.innerHTML = '<option value="">Sel. Mes</option>';
+        MONTH_LABELS.forEach((m, i) => {
+            const o1=document.createElement('option'), o2=document.createElement('option');
+            o1.value=i; o1.text=m; o2.value=i; o2.text=m;
+            s1.appendChild(o1); s2.appendChild(o2);
+        });
+    }
+
+    function formatCurrencyInput(input) {
+        let val = input.value.replace(/\D/g, '');
+        if(val==="") { input.value=""; return; }
+        input.value = new Intl.NumberFormat('es-CO').format(parseInt(val));
+    }
+    
+    // --- FUNCIÓN CRÍTICA: PARSEO SEGURO DE MONTO ---
+    function parseMoney(val) {
+        if(!val) return 0;
+        // 1. Si es número, devolverlo
+        if(typeof val === 'number') return val;
+        // 2. Si es string, quitar puntos y comas
+        let s = String(val).replace(/\./g, '').replace(/,/g, '.');
+        return parseFloat(s) || 0;
+    }
+
+    function getAmountValue(id) { 
+        const el = document.getElementById(id);
+        return parseMoney(el.value);
+    }
+
+    function getSmartValue(obj, keys) {
+        if(!obj) return undefined;
+        const objKeys = Object.keys(obj);
+        for(const k of keys) {
+            const found = objKeys.find(ok => String(ok).trim().toUpperCase() === k.toUpperCase());
+            if(found) return obj[found];
+        }
+        return undefined;
+    }
+    function detectMonthHeaders(sampleRow) {
+        if(!sampleRow) return;
+        const keys = Object.keys(sampleRow);
+        MONTH_POSSIBILITIES.forEach((possibles, idx) => {
+            const found = keys.find(k => possibles.includes(k.trim().toUpperCase()));
+            if(found) DETECTED_HEADERS[idx] = found;
+        });
+    }
+
+    // --- CHART ---
+    function updateChart() {
+        if(typeof Chart==='undefined') return;
+        const ctx = document.getElementById('budgetChart').getContext('2d');
+        let dataBudget = new Array(12).fill(0), dataSpent = new Array(12).fill(0);
+        budget.forEach(b => {
+            for(let i=0; i<12; i++) {
+                let val = getSmartValue(b, MONTH_POSSIBILITIES[i]);
+                dataBudget[i] += parseMoney(val);
+            }
+        });
+        expenses.forEach(x => {
+            const d = getSmartValue(x, ["date","Date","fecha","FECHA"]);
+            if(d) {
+                // Soportar YYYY-MM-DD y DD/MM/YYYY
+                const sep = d.includes('/') ? '/' : '-';
+                const parts = d.split(sep);
+                // Si hay 3 partes
+                if(parts.length === 3) {
+                    const mIdx = parseInt(parts[1]) - 1;
+                    const amt = parseMoney(getSmartValue(x, ["amount","Amount","monto","MONTO"]));
+                    if(mIdx >= 0 && mIdx < 12) dataSpent[mIdx] += amt;
+                }
+            }
+        });
+        if(myChart) myChart.destroy();
+        myChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: MONTH_LABELS,
+                datasets: [
+                    { label: 'Presupuesto', data: dataBudget, backgroundColor: '#002B5C', borderRadius: 4 },
+                    { label: 'Ejecutado', data: dataSpent, backgroundColor: '#00A3E0', borderRadius: 4 }
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+        });
+    }
+
+    async function syncData(showLoaderUI = false) {
+        if(showLoaderUI) { document.getElementById('loader').style.display = 'flex'; document.getElementById('loadMsg').innerText = "Sincronizando..."; }
+        let attempts = 0, success = false;
+        while(attempts < 2 && !success) {
+            attempts++;
+            try {
+                const ts = Date.now();
+                const resB = await fetch(`${API_URL}?sheet=Presupuesto&t=${ts}`);
+                budget = await resB.json();
+                if((!budget || budget.length===0) && attempts===1) throw new Error("Cold Start");
+                if(budget.length>0) detectMonthHeaders(budget[0]);
+                
+                const resE = await fetch(`${API_URL}?sheet=Gastos&t=${ts}`);
+                expenses = await resE.json();
+                
+                const resT = await fetch(`${API_URL}?sheet=Traslados&t=${ts}`);
+                transfers = await resT.json();
+                
+                renderUI(); updateChart(); success = true;
+            } catch(e) { if(attempts===1) await new Promise(r=>setTimeout(r,1500)); }
+        }
+        if(showLoaderUI) document.getElementById('loader').style.display = 'none';
+    }
+
+    async function tryAddExpense(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btnSave');
+        btn.disabled = true; btn.innerText = "Verificando...";
+        await syncData(false);
+        
+        const code = document.getElementById('selCode').value;
+        const amount = getAmountValue('amtDisplay');
+        const dateStr = document.getElementById('date').value;
+        const ref = document.getElementById('ref').value;
+        const status = document.getElementById('status').value;
+        const mIdx = parseInt(dateStr.split('-')[1])-1;
+        
+        const line = budget.find(b => String(getSmartValue(b, ["CODIGO","Codigo","Code"])).trim() == String(code).trim());
+        if(!line) { alert("Código no encontrado"); btn.disabled=false; btn.innerText="Validar"; return; }
+        
+        const budMonth = parseMoney(getSmartValue(line, MONTH_POSSIBILITIES[mIdx]));
+        
+        let spent = 0;
+        expenses.forEach(x => {
+            const c = String(getSmartValue(x,["code","Code","codigo","CODIGO"])).trim();
+            const d = getSmartValue(x,["date","Date","fecha","FECHA"]);
+            if(c==code && d && (parseInt(d.split('-')[1])-1)==mIdx) 
+                spent += parseMoney(getSmartValue(x,["amount","Amount","monto","MONTO"]));
+        });
+
+        if(amount > (budMonth - spent)) {
+            alert(`⛔ SALDO INSUFICIENTE\nMes: ${MONTH_LABELS[mIdx]}\nDisponible: ${fmt(budMonth-spent)}`);
+            btn.disabled=false; btn.innerText="Validar";
+        } else {
+            saveExpense(code, ref, amount, dateStr, status);
+        }
+    }
+
+    async function markAsPaid(id) {
+        if(!confirm("¿Confirmar pago?")) return;
+        document.getElementById('loader').style.display = 'flex';
+        try {
+            await fetch(`${API_URL}/id/${id}?sheet=Gastos`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({data: { "estado": "PAGADO" }}) });
+            alert("✅ Actualizado"); syncData(true);
+        } catch(e) { alert("Error: "+e.message); document.getElementById('loader').style.display='none'; }
+    }
+
+    async function handleTransfer(e) {
+        e.preventDefault();
+        const code = document.getElementById('selCodeTransfer').value;
+        const sIdx = parseInt(document.getElementById('monthSource').value);
+        const tIdx = parseInt(document.getElementById('monthTarget').value);
+        const amount = getAmountValue('amtTransfer');
+        const user = document.getElementById('uName').value;
+        
+        if(isNaN(sIdx) || isNaN(tIdx)) return alert("Selecciona meses");
+        if(sIdx===tIdx || amount<=0) return alert("Datos inválidos");
+        
+        document.getElementById('loader').style.display = 'flex';
+        await syncData(false);
+        
+        const line = budget.find(b => String(getSmartValue(b, ["CODIGO","Codigo"])) == String(code));
+        const colSrc = DETECTED_HEADERS[sIdx], colTgt = DETECTED_HEADERS[tIdx];
+        
+        const budSrc = parseMoney(line[colSrc]);
+        
+        let spentSrc = 0;
+        expenses.forEach(x => {
+            const c = String(getSmartValue(x,["code","Code","codigo","CODIGO"])).trim();
+            const d = getSmartValue(x,["date","Date","fecha","FECHA"]);
+            if(c==code && d && (parseInt(d.split('-')[1])-1)==sIdx)
+                spentSrc += parseMoney(getSmartValue(x,["amount","Amount","monto"]));
+        });
+
+        if(amount > (budSrc - spentSrc)) {
+            document.getElementById('loader').style.display='none';
+            return alert(`⛔ Fondos insuficientes en origen.`);
+        }
+
+        try {
+            let vSrc = parseMoney(line[colSrc]);
+            let vTgt = parseMoney(line[colTgt]);
+            
+            const upd = {}; upd[colSrc] = vSrc - amount; upd[colTgt] = vTgt + amount;
+            const key = Object.keys(line).find(k => k.toUpperCase() === "CODIGO") || "CODIGO";
+            
+            await fetch(`${API_URL}/${key}/${encodeURIComponent(code)}?sheet=Presupuesto`, {
+                method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({data: upd})
+            });
+            
+            const log = { "fecha": new Date().toISOString().split('T')[0], "codigo": code, "origen": colSrc, "destino": colTgt, "valor": amount, "usuario": user };
+            await fetch(`${API_URL}?sheet=Traslados`, {
+                method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({data: [log]})
+            });
+            
+            alert("✅ Traslado Exitoso");
+            document.getElementById('amtTransfer').value = "";
+            syncData(true);
+        } catch(e) { alert("Error: "+e.message); document.getElementById('loader').style.display='none'; }
+    }
+
+    async function saveExpense(code, ref, amount, date, status) {
+        document.getElementById('loader').style.display = 'flex';
+        const user = document.getElementById('uName').value;
+        localStorage.setItem('u', user);
+        const data = { "id": Date.now(), "codigo": code, "referencia": ref, "monto": amount, "fecha": date, "usuario": user, "estado": status };
+        try {
+            const res = await fetch(`${API_URL}?sheet=Gastos`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({data: [data]}) });
+            if(!res.ok) throw new Error("Error Save");
+            await syncData(false);
+            document.getElementById('ref').value = ""; document.getElementById('amtDisplay').value = "";
+            alert("✅ Guardado");
+        } catch(e) { alert("Error: "+e.message); }
+        document.getElementById('loader').style.display='none';
+        const btn = document.getElementById('btnSave'); btn.disabled=false; btn.innerText="Validar";
+    }
+
+    async function delExp(id) {
+        if(!confirm("¿Borrar?")) return;
+        document.getElementById('loader').style.display='flex';
+        try { await fetch(`${API_URL}/id/${id}?sheet=Gastos`, {method:'DELETE'}); await syncData(false); }
+        catch(e) { alert("Error"); }
+        document.getElementById('loader').style.display='none';
+    }
+
+    function renderUI() {
+        const sel1=document.getElementById('selCode'), sel2=document.getElementById('selCodeTransfer'), sel3=document.getElementById('detailSelectCode');
+        const c1=sel1.value, c2=sel2.value, c3=sel3.value;
+        const opts = '<option value="">-- Seleccionar Rubro --</option>';
+        sel1.innerHTML=opts; sel2.innerHTML=opts; sel3.innerHTML=opts;
+        budget.forEach(b => {
+            const c = getSmartValue(b, ["CODIGO","Codigo"]);
+            const d = getSmartValue(b, ["DESCRIPCION","Descripcion"])||"";
+            if(c) {
+                const t = `${c} - ${d.substring(0,30)}`;
+                [sel1, sel2, sel3].forEach(s => { const o=document.createElement('option'); o.value=c; o.text=t; s.appendChild(o); });
+            }
+        });
+        if(c1) sel1.value=c1; if(c2) sel2.value=c2; if(c3) sel3.value=c3;
+
+        const expMap = {};
+        let tSpent = 0;
+        expenses.forEach(x => {
+            const d = getSmartValue(x, ["date","Date","fecha","FECHA"]); if(!d) return;
+            const parts = d.split(d.includes('/')?'/':'-');
+            const m = parseInt(parts[1])-1;
+            const c = String(getSmartValue(x, ["code","Code","codigo","CODIGO"])).trim();
+            const a = parseMoney(getSmartValue(x, ["amount","Amount","monto","MONTO"]));
+            const key = `${c}-${m}`;
+            expMap[key] = (expMap[key]||0) + a;
+            tSpent += a;
+        });
+
+        const tb = document.querySelector('#mainTable tbody');
+        tb.innerHTML = '';
+        let tBud = 0;
+
+        budget.forEach(l => {
+            const c = String(getSmartValue(l, ["CODIGO","Codigo"])).trim(); if(!c) return;
+            const tr = document.createElement('tr');
+            let h = `<td class="tooltip-container"><b>${c}</b><span class="tooltip-text">${getSmartValue(l,["DESCRIPCION"])||""}</span></td>`;
+            let rowSum = 0;
+            for(let i=0; i<12; i++) {
+                let val = getSmartValue(l, MONTH_POSSIBILITIES[i]);
+                let b = parseMoney(val);
+                rowSum += b;
+                let s = expMap[`${c}-${i}`]||0;
+                let clr = s > b ? '#e74c3c' : (s > 0 ? '#27ae60' : '#95a5a6');
+                h += `<td>${b?fmt(b):'-'}<br><span style="color:${clr};font-weight:bold;font-size:0.85em">${s?fmt(s):''}</span></td>`;
+            }
+            let tot = parseMoney(getSmartValue(l, ["TOTAL","Total"]));
+            if(tot===0) tot = rowSum;
+            tBud += tot;
+            h += `<td><b>${fmt(tot)}</b></td>`;
+            tr.innerHTML = h;
+            tb.appendChild(tr);
+        });
+
+        document.getElementById('kTotal').innerText = fmt(tBud);
+        document.getElementById('kAvail').innerText = fmt(tBud-tSpent);
+        document.getElementById('kPerc').innerText = tBud>0 ? ((tSpent/tBud)*100).toFixed(1)+"%" : "0%";
+
+        const th = document.querySelector('#histTable tbody');
+        th.innerHTML = '';
+        [...expenses].sort((a,b)=>getSmartValue(b,["id"])-getSmartValue(a,["id"])).slice(0,20).forEach(x => {
+            const r = document.createElement('tr');
+            const d = getSmartValue(x, ["date","Date","fecha","FECHA"]);
+            const cd = getSmartValue(x, ["code","Code","codigo","CODIGO"]);
+            const rf = getSmartValue(x, ["ref","Ref","referencia","REFERENCIA"]);
+            const am = parseMoney(getSmartValue(x, ["amount","Amount","monto","MONTO"]));
+            const id = getSmartValue(x, ["id","ID"]);
+            const st = getSmartValue(x, ["status","Status","estado","ESTADO"])||"OC";
+            const isPaid = st.toUpperCase()==="PAGADO";
+            const badgeClass = isPaid ? "status-paid" : "status-committed";
+            const actionBtn = !isPaid ? `<button class="success action-btn" title="Pagar" onclick="markAsPaid(${id})">✅</button>` : '';
+
+            r.innerHTML = `<td>${d}</td><td>${cd}<br><small>${rf}</small></td><td class="money">${fmt(am)}</td>
+                           <td><span class="status-badge ${badgeClass}">${st}</span></td>
+                           <td style="white-space:nowrap;">${actionBtn}<button class="danger action-btn" onclick="delExp(${id})">🗑️</button></td>`;
+            th.appendChild(r);
+        });
+
+        const tt = document.querySelector('#transfersTable tbody');
+        tt.innerHTML = '';
+        if(!transfers || transfers.length === 0) tt.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">Sin movimientos</td></tr>';
+        else {
+            [...transfers].reverse().slice(0,10).forEach(t => {
+                const r = document.createElement('tr');
+                r.innerHTML = `<td>${getSmartValue(t, ["fecha"])}</td><td>${getSmartValue(t, ["codigo"])}</td><td><span class="badge-transfer">${getSmartValue(t, ["origen"])} ➔ ${getSmartValue(t, ["destino"])}</span></td><td style="font-weight:bold">${fmt(getSmartValue(t, ["valor"]))}</td><td>${getSmartValue(t, ["usuario"])}</td>`;
+                tt.appendChild(r);
+            });
+        }
+    }
+
+    function renderDetailView() {
+        const code = document.getElementById('detailSelectCode').value;
+        if(!code) return;
+        document.getElementById('detailPanel').style.display = 'block';
+        
+        const line = budget.find(b => String(getSmartValue(b, ["CODIGO","Codigo"])).trim() == String(code).trim());
+        if(!line) return;
+
+        let totalBudget = 0;
+        for(let i=0; i<12; i++) {
+            totalBudget += parseMoney(getSmartValue(line, MONTH_POSSIBILITIES[i]));
+        }
+
+        let totalSpent = 0;
+        const specificExpenses = expenses.filter(x => String(getSmartValue(x, ["code","Code","codigo","CODIGO"])).trim() == String(code).trim());
+        specificExpenses.forEach(x => { totalSpent += parseMoney(getSmartValue(x, ["amount","Amount","monto","MONTO"])); });
+
+        document.getElementById('dTotal').innerText = fmt(totalBudget);
+        document.getElementById('dSpent').innerText = fmt(totalSpent);
+        document.getElementById('dAvail').innerText = fmt(totalBudget - totalSpent);
+
+        let perc = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
+        if(perc>100) perc=100;
+        document.getElementById('dProgress').style.width = perc + "%";
+        document.getElementById('dPercText').innerText = perc.toFixed(1) + "%";
+
+        const tbody = document.querySelector('#detailTable tbody');
+        tbody.innerHTML = '';
+        if(specificExpenses.length === 0) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999">Sin gastos</td></tr>';
+        else {
+            specificExpenses.sort((a,b) => new Date(getSmartValue(b,["date"])) - new Date(getSmartValue(a,["date"])));
+            specificExpenses.forEach(x => {
+                const r = document.createElement('tr');
+                const st = getSmartValue(x, ["status","Estado","estado"]) || "OC";
+                const stClass = st==="PAGADO"?"status-paid":"status-committed";
+                r.innerHTML = `<td>${getSmartValue(x,["date","fecha"])}</td><td>${getSmartValue(x,["ref","referencia"])}</td><td>${getSmartValue(x,["user","usuario"])||"JIAT"}</td><td class="money">${fmt(getSmartValue(x,["amount","monto"]))}</td><td><span class="status-badge ${stClass}">${st}</span></td>`;
+                tbody.appendChild(r);
+            });
+        }
+    }
+
+    function fmt(n) { return new Intl.NumberFormat('es-CO', {maximumFractionDigits:0}).format(n); }
+</script>
+</body>
+</html>
