@@ -245,27 +245,49 @@
 </div>
 
 <script>
-    // ==================================================
-    // ⚠️ PEGA TU URL DE GOOGLE SCRIPT AQUÍ ⚠️
+    // ============================================
+    // ⚠️ PEGA TU NUEVA URL DE APPS SCRIPT AQUÍ ⚠️
     const API_URL = "https://script.google.com/macros/s/AKfycbwMebzoBSMi-sgvL0xxHoN_zYjiQyBwsHR2CTRePypXQALcRVwjq6AmxEXXubFE_QE/exec"; 
-    // ==================================================
+    // ============================================
 
-    let budget = [], expenses = [], transfers = [];
-    let DETECTED_HEADERS = new Array(12).fill(null); 
-    let myChart = null;
-    const MONTH_POSSIBILITIES = [["ENERO","Enero","ENE","JAN"],["FEBRERO","Febrero","FEB"],["MARZO","Marzo","MAR"],["ABRIL","Abril","ABR","APR"],["MAYO","Mayo","MAY"],["JUNIO","Junio","JUN"],["JULIO","Julio","JUL"],["AGOSTO","Agosto","AGO","AUG"],["SEPTIEMBRE","Septiembre","SEP"],["OCTUBRE","Octubre","OCT"],["NOVIEMBRE","Noviembre","NOV"],["DICIEMBRE","Diciembre","DIC"]];
-    const MONTH_LABELS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-    let pendingExpense = null;
+    // ... (Resto de variables globales: budget, expenses, etc.) ...
 
-    function unlockApp() {
-        document.getElementById('loginScreen').style.display = 'none';
-        document.getElementById('mainContainer').style.display = 'block';
-        const u = localStorage.getItem('u');
-        if(u && (u==="JIAT"||u==="MBR")) document.getElementById('uName').value = u;
-        document.getElementById('date').valueAsDate = new Date();
-        populateMonthSelects();
-        syncData(true);
+    // --- FUNCIÓN DE CONEXIÓN MEJORADA ---
+    async function apiCall(payload) {
+        // Usamos 'no-cors' NO, usamos POST normal con text/plain
+        // Esto es lo que mejor funciona con Apps Script
+        const options = {
+            method: "POST",
+            redirect: "follow", 
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(payload)
+        };
+
+        try {
+            const response = await fetch(API_URL, options);
+            
+            if (!response.ok) {
+                throw new Error(`Error HTTP: ${response.status}`);
+            }
+            
+            const text = await response.text();
+            try {
+                const json = JSON.parse(text);
+                if (json.error) throw new Error("Server Error: " + json.error);
+                return json;
+            } catch (e) {
+                console.error("Respuesta no JSON:", text);
+                throw new Error("Respuesta inválida del servidor");
+            }
+        } catch (err) {
+            console.error("Fallo en apiCall:", err);
+            throw err;
+        }
     }
+
+    // ... (Resto de funciones: syncData, addExpense, etc. 
+    // Asegúrate de que usen 'apiCall' en lugar de fetch directo donde sea posible) ...
+</script>
 
     function populateMonthSelects() {
         const s1 = document.getElementById('monthSource'), s2 = document.getElementById('monthTarget');
@@ -675,3 +697,4 @@
 </script>
 </body>
 </html>
+
