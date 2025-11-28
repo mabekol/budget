@@ -43,9 +43,8 @@
         button.primary { background: var(--primary); color: white; }
         button.accent { background: var(--accent); color: white; width: 100%; font-size: 1em; }
         button.warning { background: var(--warning); color: white; width: 100%; }
-        button.success { background: var(--success); color: white; font-size: 0.8em; padding: 5px 10px; }
-        button.danger { background: var(--danger); color: white; padding: 5px 10px; font-size: 0.8em; border-radius: 3px; }
-        button.action-btn { margin-left: 5px; min-width: 30px; text-align: center; }
+        button.success { background: var(--success); color: white; font-size: 0.8em; padding: 8px 15px; }
+        button.danger { background: var(--danger); color: white; padding: 4px 8px; font-size: 0.75em; border-radius: 3px; }
         button:hover { opacity: 0.9; transform: translateY(-1px); }
         button:disabled { background: #bdc3c7; cursor: not-allowed; transform: none; }
 
@@ -62,10 +61,20 @@
         td { padding: 10px; border-bottom: 1px solid #f0f4f8; color: #34495e; vertical-align: middle; }
         tr:hover { background-color: #f9fcff; }
         
-        /* STATUS BADGES */
+        /* TOOLTIPS */
+        .tooltip-container { position: relative; display: inline-block; cursor: help; border-bottom: 1px dashed var(--accent); }
+        .tooltip-text { visibility: hidden; width: 250px; background-color: #002B5C; color: #fff; text-align: left; border-radius: 6px; padding: 10px; position: absolute; z-index: 100; bottom: 125%; left: 50%; margin-left: -125px; opacity: 0; transition: opacity 0.3s; font-size: 0.85em; font-weight: normal; box-shadow: 0 5px 15px rgba(0,0,0,0.3); line-height: 1.4; }
+        .tooltip-text::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #002B5C transparent transparent transparent; }
+        .tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; }
+
+        /* STATUS BADGES & PROGRESS */
         .status-badge { padding: 4px 10px; border-radius: 12px; font-size: 0.75em; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block; }
-        .status-committed { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; } /* Naranja */
-        .status-paid { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; } /* Verde */
+        .status-committed { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; } 
+        .status-paid { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .badge-transfer { background: #fff3e0; color: #e67e22; padding: 4px 8px; border-radius: 12px; font-weight: bold; font-size: 0.85em; border: 1px solid #ffe0b2; }
+        .progress-bg { width: 100%; background: #e0e0e0; height: 12px; border-radius: 6px; margin-top: 5px; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.6s ease-out; }
+        .progress-fill.danger { background: var(--danger); }
 
         /* LOADER & MODAL */
         #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 999; display: none; }
@@ -76,11 +85,6 @@
         .modal { background: white; padding: 30px; border-radius: 8px; width: 90%; max-width: 450px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); border-top: 6px solid var(--danger); animation: slideDown 0.3s ease; }
         @keyframes slideDown { from {transform: translateY(-30px); opacity:0;} to {transform: translateY(0); opacity:1;} }
         .transfer-box { background: #fff5f5; padding: 15px; border-radius: 5px; border: 1px solid #fed7d7; margin-top: 15px; }
-        
-        /* PROGRESS BAR */
-        .progress-bg { width: 100%; background: #e0e0e0; height: 12px; border-radius: 6px; margin-top: 5px; overflow: hidden; }
-        .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.6s ease-out; }
-        .progress-fill.danger { background: var(--danger); }
     </style>
 </head>
 <body>
@@ -99,9 +103,7 @@
             document.getElementById('loginScreen').style.display = 'none';
             localStorage.setItem('auth', 'true');
             unlockApp();
-        } else {
-            document.getElementById('loginMsg').style.display = 'block';
-        }
+        } else { document.getElementById('loginMsg').style.display = 'block'; }
     }
     function logout() { localStorage.removeItem('auth'); location.reload(); }
     window.onload = function() {
@@ -158,28 +160,25 @@
 
     <div class="grid">
         <div class="card">
-            <h2>Registrar Nuevo Gasto</h2>
+            <h2>Registrar Gasto</h2>
             <form onsubmit="tryAddExpense(event)">
-                <div style="display:flex; gap:10px;">
-                    <div style="flex:1"><label>Solicitante</label><select id="uName" required><option value="JIAT" selected>JIAT</option><option value="MBR">MBR</option></select></div>
-                    <div style="flex:1"><label>Estado</label><select id="status" required><option value="OC">Orden de Compra</option><option value="PAGADO">Factura / Pagado</option></select></div>
+                <div style="display:flex; gap:15px;">
+                    <div style="flex:1;"><label>Solicitante</label><select id="uName" required><option value="JIAT" selected>JIAT</option><option value="MBR">MBR</option></select></div>
+                    <div style="flex:1;"><label>Estado</label><select id="status" required><option value="OC">Orden de Compra</option><option value="PAGADO">Factura / Pagado</option></select></div>
                 </div>
-                
                 <label>Rubro</label><select id="selCode" required><option>Cargando...</option></select>
-                <label>Referencia</label><input type="text" id="ref" placeholder="Ej: OC-1001" required>
-                
+                <label>Referencia</label><input type="text" id="ref" placeholder="Ej: Factura 123" required>
                 <div style="display:flex; gap:15px;">
                     <div style="flex:1"><label>Monto ($)</label><input type="text" id="amtDisplay" placeholder="0" required oninput="formatCurrencyInput(this)"></div>
                     <div style="flex:1"><label>Fecha</label><input type="date" id="date" required></div>
                 </div>
-                <button type="submit" id="btnSave" class="accent">Validar Disponibilidad</button>
+                <button type="submit" id="btnSave" class="accent">Validar</button>
             </form>
         </div>
-
         <div class="card">
             <h2>Últimos Gastos</h2>
             <div class="table-wrap" style="max-height:380px">
-                <table id="histTable"><thead><tr><th>Fecha</th><th>Detalle</th><th>Monto</th><th>Estado</th><th></th></tr></thead><tbody></tbody></table>
+                <table id="histTable"><thead><tr><th>Fecha</th><th>Cód</th><th>Ref</th><th>Monto</th><th>Est</th><th></th></tr></thead><tbody></tbody></table>
             </div>
         </div>
     </div>
@@ -189,7 +188,7 @@
         <div class="table-wrap"><table id="mainTable"><thead><tr><th>Cód</th><th>Ene</th><th>Feb</th><th>Mar</th><th>Abr</th><th>May</th><th>Jun</th><th>Jul</th><th>Ago</th><th>Sep</th><th>Oct</th><th>Nov</th><th>Dic</th><th>Total</th></tr></thead><tbody></tbody></table></div>
     </div>
 
-    <div class="grid">
+    <div class="grid-transfer">
         <div class="card transfer-zone">
             <h2>Módulo de Traslados</h2>
             <form onsubmit="handleTransfer(event)">
@@ -225,22 +224,31 @@
                 <div class="progress-bg"><div class="progress-fill" id="dProgress"></div></div>
                 <div style="text-align:right; font-weight:bold; color:var(--primary)" id="dPercText">0%</div>
             </div>
+            
+            <div class="detail-subtitle">📉 Gastos Ejecutados</div>
             <div class="table-wrap" style="max-height:250px;">
-                <table id="detailTable"><thead><tr><th>Fecha</th><th>Ref</th><th>Solicitante</th><th>Monto</th></tr></thead><tbody></tbody></table>
+                <table id="detailTable"><thead><tr><th>Fecha</th><th>Ref</th><th>Solicitante</th><th>Monto</th><th>Estado</th></tr></thead><tbody></tbody></table>
+            </div>
+            
+            <div class="detail-subtitle" style="margin-top:20px;">🔄 Historial de Traslados</div>
+            <div class="table-wrap" style="max-height:200px;">
+                <table id="detailTransfersTable"><thead><tr><th>Fecha</th><th>Movimiento</th><th>Valor</th><th>Usuario</th></tr></thead><tbody></tbody></table>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-    // ⚠️ PEGA TU URL DE SHEETDB ⚠️
+    // ==================================================
+    // ⚠️ PEGA TU URL DE SHEETDB AQUÍ ⚠️
     const API_URL = "https://sheetdb.io/api/v1/sw4ed7qqbxl4k";
+    // ==================================================
 
     let budget = [], expenses = [], transfers = [];
     let DETECTED_HEADERS = new Array(12).fill(null); 
     let myChart = null;
     const MONTH_POSSIBILITIES = [["ENERO","Enero","ENE","JAN"],["FEBRERO","Febrero","FEB"],["MARZO","Marzo","MAR"],["ABRIL","Abril","ABR","APR"],["MAYO","Mayo","MAY"],["JUNIO","Junio","JUN"],["JULIO","Julio","JUL"],["AGOSTO","Agosto","AGO","AUG"],["SEPTIEMBRE","Septiembre","SEP"],["OCTUBRE","Octubre","OCT"],["NOVIEMBRE","Noviembre","NOV"],["DICIEMBRE","Diciembre","DIC"]];
-    const MONTH_LABELS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+    const MONTH_LABELS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
     let pendingExpense = null;
 
     function unlockApp() {
@@ -269,24 +277,28 @@
         input.value = new Intl.NumberFormat('es-CO').format(parseInt(val));
     }
     function getAmountValue(id) { return parseFloat(document.getElementById(id).value.replace(/\./g, '')) || 0; }
+    
+    // BÚSQUEDA SEGURA (String + Trim + Upper)
     function getSmartValue(obj, keys) {
         if(!obj) return undefined;
         const objKeys = Object.keys(obj);
         for(const k of keys) {
-            const found = objKeys.find(ok => ok.trim().toUpperCase() === k.toUpperCase());
+            const found = objKeys.find(ok => String(ok).trim().toUpperCase() === k.toUpperCase());
             if(found) return obj[found];
         }
         return undefined;
     }
+    
     function detectMonthHeaders(sampleRow) {
         if(!sampleRow) return;
         const keys = Object.keys(sampleRow);
         MONTH_POSSIBILITIES.forEach((possibles, idx) => {
-            const found = keys.find(k => possibles.includes(k.trim().toUpperCase()));
+            const found = keys.find(k => possibles.includes(String(k).trim().toUpperCase()));
             if(found) DETECTED_HEADERS[idx] = found;
         });
     }
 
+    // --- RENDER DETALLE ---
     function renderDetailView() {
         const code = document.getElementById('detailSelectCode').value;
         if(!code) return;
@@ -303,7 +315,12 @@
         }
 
         let totalSpent = 0;
-        const specificExpenses = expenses.filter(x => getSmartValue(x, ["code","Code","codigo","CODIGO"]) == code);
+        const specificExpenses = expenses.filter(x => {
+            // Comparación segura de códigos (convertir a String)
+            const c1 = String(getSmartValue(x, ["code","Code","codigo","CODIGO"])).trim();
+            const c2 = String(code).trim();
+            return c1 === c2;
+        });
         specificExpenses.forEach(x => { totalSpent += parseFloat(getSmartValue(x, ["amount","Amount","monto","MONTO"]))||0; });
 
         document.getElementById('dTotal').innerText = fmt(totalBudget);
@@ -317,15 +334,37 @@
         bar.className = perc > 90 ? "progress-fill danger" : "progress-fill";
         document.getElementById('dPercText').innerText = perc.toFixed(1) + "%";
 
+        // Tabla Gastos
         const tbody = document.querySelector('#detailTable tbody');
         tbody.innerHTML = '';
-        if(specificExpenses.length === 0) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#999">Sin gastos</td></tr>';
+        if(specificExpenses.length === 0) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999">Sin gastos</td></tr>';
         else {
-            specificExpenses.sort((a,b) => new Date(getSmartValue(b,["date"])) - new Date(getSmartValue(a,["date"])));
+            specificExpenses.sort((a,b) => new Date(getSmartValue(b,["date","Date","fecha"])) - new Date(getSmartValue(a,["date","Date","fecha"])));
             specificExpenses.forEach(x => {
                 const r = document.createElement('tr');
-                r.innerHTML = `<td>${getSmartValue(x,["date","fecha"])}</td><td>${getSmartValue(x,["ref","referencia"])}</td><td>${getSmartValue(x,["user","usuario"])||"JIAT"}</td><td class="money">${fmt(getSmartValue(x,["amount","monto"]))}</td>`;
+                const st = getSmartValue(x, ["status","Estado","estado"]) || "OC";
+                const stClass = st==="PAGADO"?"status-paid":"status-committed";
+                r.innerHTML = `
+                    <td>${getSmartValue(x,["date","Date","fecha"])}</td>
+                    <td>${getSmartValue(x,["ref","Ref","referencia"])}</td>
+                    <td>${getSmartValue(x,["user","User","usuario"])||"JIAT"}</td>
+                    <td class="money">${fmt(getSmartValue(x,["amount","Amount","monto"]))}</td>
+                    <td><span class="status-badge ${stClass}">${st}</span></td>
+                `;
                 tbody.appendChild(r);
+            });
+        }
+
+        // Tabla Traslados
+        const specificTransfers = transfers.filter(t => String(getSmartValue(t, ["Codigo","CODIGO","codigo"])).trim() == String(code).trim());
+        const tbodyT = document.querySelector('#detailTransfersTable tbody');
+        tbodyT.innerHTML = '';
+        if(specificTransfers.length === 0) tbodyT.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#999">Sin traslados</td></tr>';
+        else {
+            specificTransfers.reverse().forEach(t => {
+                const r = document.createElement('tr');
+                r.innerHTML = `<td>${getSmartValue(t,["Fecha","fecha"])}</td><td><span class="badge-transfer">${getSmartValue(t,["Origen","origen"])} ➔ ${getSmartValue(t,["Destino","destino"])}</span></td><td style="font-weight:bold">${fmt(getSmartValue(t,["Valor","valor"]))}</td><td>${getSmartValue(t,["Usuario","usuario"])}</td>`;
+                tbodyT.appendChild(r);
             });
         }
     }
@@ -355,8 +394,8 @@
             data: {
                 labels: MONTH_LABELS,
                 datasets: [
-                    { label: 'Presupuesto', data: dataBudget, backgroundColor: '#002B5C' },
-                    { label: 'Ejecutado', data: dataSpent, backgroundColor: '#00A3E0' }
+                    { label: 'Presupuesto', data: dataBudget, backgroundColor: '#002B5C', borderRadius: 4 },
+                    { label: 'Ejecutado', data: dataSpent, backgroundColor: '#00A3E0', borderRadius: 4 }
                 ]
             },
             options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
@@ -397,7 +436,7 @@
         const amount = getAmountValue('amtDisplay');
         const dateStr = document.getElementById('date').value;
         const ref = document.getElementById('ref').value;
-        const status = document.getElementById('status') ? document.getElementById('status').value : "OC";
+        const status = document.getElementById('status').value;
         const mIdx = parseInt(dateStr.split('-')[1])-1;
         
         const line = budget.find(b => getSmartValue(b, ["CODIGO","Codigo","Code"]) == code);
@@ -421,26 +460,13 @@
         }
     }
 
-    // NUEVA FUNCION PARA LEGALIZAR (PAGAR)
     async function markAsPaid(id) {
-        if(!confirm("¿Confirmar pago de esta Orden?")) return;
+        if(!confirm("¿Confirmar pago?")) return;
         document.getElementById('loader').style.display = 'flex';
-        
         try {
-            // PATCH para actualizar solo el estado en SheetDB
-            // Usamos la columna 'id' como llave (debe existir en Excel)
-            await fetch(`${API_URL}/id/${id}?sheet=Gastos`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data: { "estado": "PAGADO" } }) // Enviamos en minuscula para estandarizar
-            });
-            
-            alert("✅ Estado actualizado.");
-            syncData(true);
-        } catch(e) {
-            alert("Error: " + e.message);
-            document.getElementById('loader').style.display = 'none';
-        }
+            await fetch(`${API_URL}/id/${id}?sheet=Gastos`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({data: { "estado": "PAGADO" }}) });
+            alert("✅ Actualizado"); syncData(true);
+        } catch(e) { alert("Error: "+e.message); document.getElementById('loader').style.display='none'; }
     }
 
     async function handleTransfer(e) {
@@ -501,22 +527,10 @@
         document.getElementById('loader').style.display = 'flex';
         const user = document.getElementById('uName').value;
         localStorage.setItem('u', user);
-        
-        // Payload en minúsculas para coincidir con los encabezados estandarizados
-        const data = { 
-            "id": Date.now(), 
-            "codigo": code, 
-            "referencia": ref, 
-            "monto": amount, 
-            "fecha": date, 
-            "usuario": user,
-            "estado": status || "OC"
-        };
-        
+        const data = { "id": Date.now(), "codigo": code, "referencia": ref, "monto": amount, "fecha": date, "usuario": user, "estado": status };
         try {
             const res = await fetch(`${API_URL}?sheet=Gastos`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({data: [data]}) });
             if(!res.ok) throw new Error("Error Save");
-            
             await syncData(false);
             document.getElementById('ref').value = ""; document.getElementById('amtDisplay').value = "";
             alert("✅ Guardado");
@@ -536,13 +550,13 @@
     function renderUI() {
         const sel1=document.getElementById('selCode'), sel2=document.getElementById('selCodeTransfer'), sel3=document.getElementById('detailSelectCode');
         const c1=sel1.value, c2=sel2.value, c3=sel3.value;
-        const opts = '<option value="">-- Seleccionar --</option>';
+        const opts = '<option value="">-- Seleccionar Rubro --</option>';
         sel1.innerHTML=opts; sel2.innerHTML=opts; sel3.innerHTML=opts;
         budget.forEach(b => {
             const c = getSmartValue(b, ["CODIGO","Codigo"]);
             const d = getSmartValue(b, ["DESCRIPCION","Descripcion"])||"";
             if(c) {
-                const t = `${c} - ${d.substring(0,30)}`;
+                const t = `${c} - ${d.substring(0,35)}`;
                 [sel1, sel2, sel3].forEach(s => { const o=document.createElement('option'); o.value=c; o.text=t; s.appendChild(o); });
             }
         });
@@ -562,7 +576,6 @@
         const tb = document.querySelector('#mainTable tbody');
         tb.innerHTML = '';
         let tBud = 0;
-        
         budget.forEach(l => {
             const c = getSmartValue(l, ["CODIGO","Codigo"]); if(!c) return;
             const tr = document.createElement('tr');
@@ -591,24 +604,18 @@
 
         const th = document.querySelector('#histTable tbody');
         th.innerHTML = '';
-        [...expenses].sort((a,b)=>getSmartValue(b,["id"])-getSmartValue(a,["id"])).slice(0,20).forEach(x => {
+        [...expenses].sort((a,b)=>getSmartValue(b,["id"])-getSmartValue(a,["id"])).forEach(x => {
             const r = document.createElement('tr');
             const d = getSmartValue(x, ["date","Date","fecha","FECHA"]);
             const cd = getSmartValue(x, ["code","Code","codigo","CODIGO"]);
-            const u = getSmartValue(x, ["user","User","usuario","USUARIO"])||"JIAT";
             const rf = getSmartValue(x, ["ref","Ref","referencia","REFERENCIA"]);
             const am = getSmartValue(x, ["amount","Amount","monto","MONTO"]);
             const id = getSmartValue(x, ["id","ID"]);
+            const st = getSmartValue(x, ["status","Status","estado","ESTADO"])||"OC";
+            const isPaid = st.toUpperCase()==="PAGADO";
+            const btn = !isPaid ? `<button class="success action-btn" title="Pagar" onclick="markAsPaid(${id})">✅</button>` : '';
             
-            // Estado
-            const st = getSmartValue(x, ["status","Status","estado","ESTADO"]) || "OC";
-            const isPaid = st.toUpperCase() === "PAGADO";
-            const badgeClass = isPaid ? "status-paid" : "status-committed";
-            const actionBtn = !isPaid ? `<button class="success action-btn" title="Pagar" onclick="markAsPaid(${id})">✅</button>` : '';
-
-            r.innerHTML = `<td>${d}</td><td>${cd}<br><small>${rf}</small></td><td class="money">${fmt(am)}</td>
-                           <td><span class="status-badge ${badgeClass}">${st}</span></td>
-                           <td style="white-space:nowrap;">${actionBtn}<button class="danger action-btn" onclick="delExp(${id})">🗑️</button></td>`;
+            r.innerHTML = `<td>${d}</td><td>${cd}<br><small>${rf}</small></td><td class="money">${fmt(am)}</td><td><span class="status-badge ${isPaid?'status-paid':'status-committed'}">${st}</span></td><td style="white-space:nowrap;">${btn}<button class="danger action-btn" onclick="delExp(${id})">🗑️</button></td>`;
             th.appendChild(r);
         });
 
@@ -616,7 +623,7 @@
         tt.innerHTML = '';
         if(!transfers || transfers.length === 0) tt.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">Sin movimientos</td></tr>';
         else {
-            [...transfers].reverse().slice(0,10).forEach(t => {
+            [...transfers].reverse().forEach(t => {
                 const r = document.createElement('tr');
                 r.innerHTML = `<td>${getSmartValue(t, ["fecha"])}</td><td>${getSmartValue(t, ["codigo"])}</td><td><span class="badge-transfer">${getSmartValue(t, ["origen"])} ➔ ${getSmartValue(t, ["destino"])}</span></td><td style="font-weight:bold">${fmt(getSmartValue(t, ["valor"]))}</td><td>${getSmartValue(t, ["usuario"])}</td>`;
                 tt.appendChild(r);
